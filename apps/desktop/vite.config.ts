@@ -1,10 +1,10 @@
 import { defineConfig } from 'vite';
-import { svelte } from '@sveltejs/vite-plugin-svelte';
+import react from '@vitejs/plugin-react';
 import path from 'path';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [svelte()],
+  plugins: [react()],
 
   // Vite options tailored for Tauri development
   clearScreen: false,
@@ -25,12 +25,23 @@ export default defineConfig({
 
   resolve: {
     alias: {
-      $lib: path.resolve('./src/lib'),
-      $components: path.resolve('./src/lib/components'),
-      $stores: path.resolve('./src/lib/stores'),
-      $api: path.resolve('./src/lib/api'),
-      $utils: path.resolve('./src/lib/utils'),
+      '@': path.resolve('./src'),
+      '@/lib': path.resolve('./src/lib'),
+      '@/components': path.resolve('./src/lib/components'),
+      '@/contexts': path.resolve('./src/lib/contexts'),
+      '@/api': path.resolve('./src/lib/api'),
+      '@/utils': path.resolve('./src/lib/utils'),
     },
+    // Dedupe React and Slate to avoid multiple instances
+    dedupe: [
+      'react',
+      'react-dom',
+      'slate',
+      'slate-react',
+      'slate-history',
+      'platejs',
+      '@platejs/core',
+    ],
   },
 
   // Prevent vite from obscuring rust errors
