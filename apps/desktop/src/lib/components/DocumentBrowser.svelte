@@ -27,7 +27,7 @@
         newDocTitle.trim(),
         documentStore.mode,
         selectedSubcategory,
-        selectedSubcategory
+        undefined // No subcategory for now
       );
       newDocTitle = '';
       showCreateForm = false;
@@ -41,6 +41,12 @@
       await documentStore.openDocument(docPath);
     } catch (e) {
       console.error('Failed to open document:', e);
+    }
+  }
+
+  async function handleRefresh() {
+    if (projectStore.current) {
+      await documentStore.loadDocuments(projectStore.current.path);
     }
   }
 
@@ -66,9 +72,14 @@
   <header>
     <div class="header-top">
       <h2>Documents</h2>
-      {#if !showCreateForm}
-        <button class="btn-create" onclick={() => (showCreateForm = true)}>+ New Document</button>
-      {/if}
+      <div class="header-actions">
+        {#if !showCreateForm}
+          <button class="btn-refresh" onclick={handleRefresh} title="Refresh documents">
+            🔄
+          </button>
+          <button class="btn-create" onclick={() => (showCreateForm = true)}>+ New Document</button>
+        {/if}
+      </div>
     </div>
     <ModeSwitcher />
   </header>
@@ -115,9 +126,15 @@
     {:else if documentStore.filteredDocuments.length === 0}
       <div class="empty-state">
         <p>
-          No {documentStore.mode === 'world' ? 'world' : 'narrative'} documents yet. Create your
-          first document to get started!
+          No {documentStore.mode === 'world' ? 'world' : 'narrative'} documents yet.
         </p>
+        {#if documentStore.documents.length > 0}
+          <p class="debug-info">
+            ({documentStore.documents.length} total documents loaded, but none match current mode)
+          </p>
+        {:else}
+          <p>Create your first document to get started!</p>
+        {/if}
       </div>
     {:else}
       <div class="document-grid">
@@ -164,9 +181,33 @@
     align-items: center;
   }
 
+  .header-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
   header h2 {
     font-size: 1.25rem;
     font-weight: 600;
+  }
+
+  .btn-refresh {
+    padding: 0.5rem;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 0.375rem;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .btn-refresh:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: rotate(90deg);
   }
 
   .btn-create {
@@ -280,6 +321,12 @@
     text-align: center;
     padding: 2rem 1rem;
     color: rgba(255, 255, 255, 0.5);
+  }
+
+  .debug-info {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.3);
+    margin-top: 0.5rem;
   }
 
   .document-grid {
