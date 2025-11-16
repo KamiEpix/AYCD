@@ -1,8 +1,8 @@
-import { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useEffect } from 'react';
 import { Plate, PlateContent, usePlateEditor } from 'platejs/react';
 import {
-  BasicBlocksPlugin,
   BasicMarksPlugin,
+  BasicBlocksPlugin,
   BoldPlugin,
   ItalicPlugin,
   UnderlinePlugin,
@@ -13,8 +13,10 @@ import {
 } from '@platejs/basic-nodes/react';
 import { ListPlugin } from '@platejs/list/react';
 import { TablePlugin } from '@platejs/table/react';
-import { ImagePlugin, MediaEmbedPlugin } from '@platejs/media/react';
 import { LinkPlugin } from '@platejs/link/react';
+import { ImagePlugin, MediaEmbedPlugin } from '@platejs/media/react';
+import { Transforms, Editor as SlateEditor, Element as SlateElement } from 'slate';
+import { useSlateStatic } from 'slate-react';
 
 import type { Document } from '@aycd/core';
 
@@ -26,7 +28,7 @@ export interface PlateEditorProps {
 
 // Editor plugins configuration
 const plugins = [
-  // Basic marks
+  // Marks
   BasicMarksPlugin,
   BoldPlugin,
   ItalicPlugin,
@@ -34,7 +36,7 @@ const plugins = [
   StrikethroughPlugin,
   CodePlugin,
 
-  // Block elements
+  // Blocks
   BasicBlocksPlugin,
   HeadingPlugin,
   BlockquotePlugin,
@@ -42,165 +44,123 @@ const plugins = [
   // Lists
   ListPlugin,
 
-  // Table
+  // Tables
   TablePlugin,
 
   // Media
+  LinkPlugin,
   ImagePlugin,
   MediaEmbedPlugin,
-  LinkPlugin,
 ];
 
-// Toolbar component
-function Toolbar({ editor }: { editor: any }) {
-  const toggleMark = (mark: string) => {
-    if (!editor) return;
-    try {
-      const plugin = editor.getPlugin({ key: mark });
-      if (plugin?.api?.[mark]?.toggle) {
-        plugin.api[mark].toggle();
-      }
-    } catch (e) {
-      console.warn(`Failed to toggle mark: ${mark}`, e);
-    }
+// Toolbar Buttons
+function MarkButton({ format, icon }: { format: string; icon: React.ReactNode }) {
+  const editor = useSlateStatic();
+
+  const isActive = () => {
+    const marks = SlateEditor.marks(editor);
+    return marks ? (marks as any)[format] === true : false;
   };
 
-  const toggleBlock = (blockType: string) => {
-    if (!editor) return;
-    try {
-      const plugin = editor.getPlugin({ key: blockType });
-      if (plugin?.api?.[blockType]?.toggle) {
-        plugin.api[blockType].toggle();
-      }
-    } catch (e) {
-      console.warn(`Failed to toggle block: ${blockType}`, e);
+  const toggleMark = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const isCurrentlyActive = isActive();
+
+    if (isCurrentlyActive) {
+      SlateEditor.removeMark(editor, format);
+    } else {
+      SlateEditor.addMark(editor, format, true);
     }
   };
 
   return (
+    <button
+      className={`toolbar-button ${isActive() ? 'active' : ''}`}
+      onMouseDown={toggleMark}
+      title={format}
+    >
+      {icon}
+    </button>
+  );
+}
+
+function BlockButton({ format, icon }: { format: string; icon: React.ReactNode }) {
+  const editor = useSlateStatic();
+
+  const isActive = () => {
+    const { selection } = editor;
+    if (!selection) return false;
+
+    const [match] = Array.from(
+      SlateEditor.nodes(editor, {
+        at: SlateEditor.unhangRange(editor, selection),
+        match: (n) => !SlateEditor.isEditor(n) && SlateElement.isElement(n) && (n as any).type === format,
+      })
+    );
+
+    return !!match;
+  };
+
+  const toggleBlock = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const isCurrentlyActive = isActive();
+
+    Transforms.setNodes(
+      editor as any,
+      { type: isCurrentlyActive ? 'p' : format } as any,
+      { match: (n) => SlateElement.isElement(n) && (editor as any).isBlock(n) }
+    );
+  };
+
+  return (
+    <button
+      className={`toolbar-button ${isActive() ? 'active' : ''}`}
+      onMouseDown={toggleBlock}
+      title={format}
+    >
+      {icon}
+    </button>
+  );
+}
+
+function Toolbar() {
+  return (
     <div className="plate-toolbar">
       <div className="toolbar-group">
-        <button
-          className="toolbar-button"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            toggleMark('bold');
-          }}
-          title="Bold (Cmd+B)"
-        >
-          <strong>B</strong>
-        </button>
-        <button
-          className="toolbar-button"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            toggleMark('italic');
-          }}
-          title="Italic (Cmd+I)"
-        >
-          <em>I</em>
-        </button>
-        <button
-          className="toolbar-button"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            toggleMark('underline');
-          }}
-          title="Underline (Cmd+U)"
-        >
-          <u>U</u>
-        </button>
-        <button
-          className="toolbar-button"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            toggleMark('strikethrough');
-          }}
-          title="Strikethrough"
-        >
-          <s>S</s>
-        </button>
-        <button
-          className="toolbar-button"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            toggleMark('code');
-          }}
-          title="Code"
-        >
-          {'<>'}
-        </button>
+        <MarkButton format="bold" icon={<strong>B</strong>} />
+        <MarkButton format="italic" icon={<em>I</em>} />
+        <MarkButton format="underline" icon={<u>U</u>} />
+        <MarkButton format="strikethrough" icon={<s>S</s>} />
+        <MarkButton format="code" icon={'<>'} />
       </div>
 
       <div className="toolbar-divider" />
 
       <div className="toolbar-group">
-        {[1, 2, 3].map((level) => (
-          <button
-            key={level}
-            className="toolbar-button"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              toggleBlock(`h${level}`);
-            }}
-            title={`Heading ${level}`}
-          >
-            H{level}
-          </button>
-        ))}
+        <BlockButton format="h1" icon="H1" />
+        <BlockButton format="h2" icon="H2" />
+        <BlockButton format="h3" icon="H3" />
       </div>
 
       <div className="toolbar-divider" />
 
       <div className="toolbar-group">
-        <button
-          className="toolbar-button"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            toggleBlock('ul');
-          }}
-          title="Bulleted List"
-        >
-          •
-        </button>
-        <button
-          className="toolbar-button"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            toggleBlock('ol');
-          }}
-          title="Numbered List"
-        >
-          1.
-        </button>
-        <button
-          className="toolbar-button"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            toggleBlock('blockquote');
-          }}
-          title="Quote"
-        >
-          "
-        </button>
+        <BlockButton format="ul" icon="•" />
+        <BlockButton format="ol" icon="1." />
+        <BlockButton format="blockquote" icon={'"'} />
       </div>
     </div>
   );
 }
 
 export function PlateEditor({ content = '', onChange, readOnly = false }: PlateEditorProps) {
-  // Parse initial content
+  // Parse content to Slate value
   const initialValue = useMemo(() => {
     if (!content || content.trim() === '') {
-      return [
-        {
-          type: 'p',
-          children: [{ text: '' }],
-        },
-      ];
+      return [{ type: 'p', children: [{ text: '' }] }];
     }
 
-    // Simple markdown-like parsing
+    // Simple parsing - convert text to Slate nodes
     const lines = content.split('\n');
     return lines.map((line) => {
       if (line.startsWith('# ')) {
@@ -212,7 +172,7 @@ export function PlateEditor({ content = '', onChange, readOnly = false }: PlateE
       } else if (line.startsWith('> ')) {
         return { type: 'blockquote', children: [{ text: line.slice(2) }] };
       } else if (line.startsWith('- ') || line.startsWith('* ')) {
-        return { type: 'li', children: [{ text: line.slice(2) }] };
+        return { type: 'ul', children: [{ type: 'li', children: [{ text: line.slice(2) }] }] };
       } else {
         return { type: 'p', children: [{ text: line }] };
       }
@@ -224,50 +184,78 @@ export function PlateEditor({ content = '', onChange, readOnly = false }: PlateE
     value: initialValue,
   });
 
-  // Handle content changes
+  // Serialize Slate value back to text
+  const serializeToText = useCallback((nodes: any[]) => {
+    return nodes
+      .map((node) => {
+        const text = node.children
+          ?.map((child: any) => {
+            if ('text' in child) return child.text;
+            if ('children' in child) return serializeToText([child]);
+            return '';
+          })
+          .join('');
+
+        switch (node.type) {
+          case 'h1':
+            return `# ${text}`;
+          case 'h2':
+            return `## ${text}`;
+          case 'h3':
+            return `### ${text}`;
+          case 'blockquote':
+            return `> ${text}`;
+          case 'li':
+            return `- ${text}`;
+          case 'ul':
+            return node.children?.map((li: any) => `- ${serializeToText([li])}`).join('\n');
+          case 'ol':
+            return node.children
+              ?.map((li: any, i: number) => `${i + 1}. ${serializeToText([li])}`)
+              .join('\n');
+          default:
+            return text;
+        }
+      })
+      .join('\n');
+  }, []);
+
+  // Handle changes
   const handleChange = useCallback(
     ({ value }: { value: any }) => {
       if (!onChange || readOnly) return;
-
-      // Convert Slate value back to markdown-ish text
-      const text = value
-        .map((node: any) => {
-          const nodeText = node.children?.map((child: any) => child.text || '').join('') || '';
-
-          switch (node.type) {
-            case 'h1':
-              return `# ${nodeText}`;
-            case 'h2':
-              return `## ${nodeText}`;
-            case 'h3':
-              return `### ${nodeText}`;
-            case 'h4':
-              return `#### ${nodeText}`;
-            case 'h5':
-              return `##### ${nodeText}`;
-            case 'h6':
-              return `###### ${nodeText}`;
-            case 'blockquote':
-              return `> ${nodeText}`;
-            case 'li':
-              return `- ${nodeText}`;
-            case 'code_block':
-              return `\`\`\`\n${nodeText}\n\`\`\``;
-            default:
-              return nodeText;
-          }
-        })
-        .join('\n');
-
+      const text = serializeToText(value);
       onChange(text);
     },
-    [onChange, readOnly]
+    [onChange, readOnly, serializeToText]
   );
+
+  // Reset editor value when content prop changes (different document loaded)
+  useEffect(() => {
+    if (editor && initialValue) {
+      try {
+        const editorAny = editor as any;
+        // Clear existing content
+        Transforms.delete(editorAny, {
+          at: {
+            anchor: SlateEditor.start(editorAny, []),
+            focus: SlateEditor.end(editorAny, []),
+          },
+        });
+
+        // Insert new content
+        Transforms.removeNodes(editorAny, { at: [0] });
+        Transforms.insertNodes(editorAny, initialValue as any);
+      } catch (error) {
+        console.error('Failed to reset editor content:', error);
+      }
+    }
+  }, [content]); // Intentionally using content, not initialValue
 
   return (
     <div className="plate-editor-container">
       <Plate editor={editor} onChange={handleChange}>
-        <Toolbar editor={editor} />
+        <Toolbar />
         <PlateContent
           className="plate-editor-content"
           readOnly={readOnly}
@@ -280,6 +268,7 @@ export function PlateEditor({ content = '', onChange, readOnly = false }: PlateE
           display: flex;
           flex-direction: column;
           height: 100%;
+          width: 100%;
           background: rgba(0, 0, 0, 0.2);
         }
 
@@ -290,6 +279,7 @@ export function PlateEditor({ content = '', onChange, readOnly = false }: PlateE
           background: rgba(0, 0, 0, 0.3);
           border-bottom: 1px solid rgba(255, 255, 255, 0.1);
           flex-wrap: wrap;
+          flex-shrink: 0;
         }
 
         .toolbar-group {
@@ -324,6 +314,11 @@ export function PlateEditor({ content = '', onChange, readOnly = false }: PlateE
           transform: translateY(-1px);
         }
 
+        .toolbar-button.active {
+          background: rgba(102, 126, 234, 0.4);
+          border-color: rgba(102, 126, 234, 0.6);
+        }
+
         .toolbar-button:active {
           transform: translateY(0);
         }
@@ -348,6 +343,7 @@ export function PlateEditor({ content = '', onChange, readOnly = false }: PlateE
         .plate-editor-content [data-slate-placeholder] {
           color: rgba(255, 255, 255, 0.25) !important;
           font-style: italic;
+          opacity: 1 !important;
         }
 
         /* Heading styles */
@@ -470,6 +466,23 @@ export function PlateEditor({ content = '', onChange, readOnly = false }: PlateE
           border: none;
           border-top: 2px solid rgba(255, 255, 255, 0.1);
           margin: 2rem 0;
+        }
+
+        /* Text formatting */
+        .plate-editor-content strong {
+          font-weight: 700;
+        }
+
+        .plate-editor-content em {
+          font-style: italic;
+        }
+
+        .plate-editor-content u {
+          text-decoration: underline;
+        }
+
+        .plate-editor-content s {
+          text-decoration: line-through;
         }
       `}</style>
     </div>
