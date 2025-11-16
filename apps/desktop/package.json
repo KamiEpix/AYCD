@@ -23,6 +23,7 @@
   "dependencies": {
     "@aycd/editor": "workspace:*",
     "@platejs/basic-nodes": "^51.0.0",
+    "@platejs/core": "^51.0.0",
     "@platejs/dnd": "^51.0.0",
     "@platejs/link": "^51.0.0",
     "@platejs/list": "^51.0.0",
@@ -36,6 +37,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "slate": "^0.118.1",
+    "slate-dom": "^0.119.0",
     "slate-history": "^0.113.1",
     "slate-react": "^0.119.0"
   },
