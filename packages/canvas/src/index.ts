@@ -4,5 +4,5 @@
  * TODO: Implement Konva integration with svelte-konva
  */
 
-export { Canvas } from './Canvas.svelte';
+export { default as Canvas } from './Canvas.svelte';
 export type { CanvasProps } from './types';

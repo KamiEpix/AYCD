@@ -17,6 +17,8 @@
     "@aycd/core": "workspace:*"
   },
   "devDependencies": {
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
     "typescript": "^5.7.2"
   },
   "peerDependencies": {
