@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useEffect, useState, useRef } from 'react';
-import { createEditor, Descendant, Transforms, Editor as SlateEditor, Element as SlateElement } from 'slate';
-import { Slate, Editable, withReact, useSlate } from 'slate-react';
+import { createEditor, Descendant, Transforms, Editor as SlateEditor, Element as SlateElement, Range } from 'slate';
+import { Slate, Editable, withReact, useSlate, ReactEditor } from 'slate-react';
 import { withHistory } from 'slate-history';
 
 import type { Document } from '@aycd/core';
@@ -11,156 +11,221 @@ export interface PlateEditorProps {
   readOnly?: boolean;
 }
 
-// Toolbar Buttons
-function MarkButton({ format, icon }: { format: string; icon: React.ReactNode }) {
-  const editor = useSlate();
+// Slash command menu items
+const SLASH_COMMANDS = [
+  { key: 'h1', label: 'Heading 1', icon: 'H1', description: 'Large heading' },
+  { key: 'h2', label: 'Heading 2', icon: 'H2', description: 'Medium heading' },
+  { key: 'h3', label: 'Heading 3', icon: 'H3', description: 'Small heading' },
+  { key: 'p', label: 'Text', icon: '¶', description: 'Plain text paragraph' },
+  { key: 'ul', label: 'Bulleted List', icon: '•', description: 'Create a bulleted list' },
+  { key: 'ol', label: 'Numbered List', icon: '1.', description: 'Create a numbered list' },
+  { key: 'blockquote', label: 'Quote', icon: '"', description: 'Insert a quote' },
+  { key: 'code', label: 'Code Block', icon: '<>', description: 'Insert code block' },
+];
 
-  const isActive = () => {
+// Floating Toolbar Component
+function FloatingToolbar() {
+  const editor = useSlate();
+  const toolbarRef = useRef<HTMLDivElement>(null);
+
+  const isMarkActive = (format: string) => {
     const marks = SlateEditor.marks(editor);
     return marks ? (marks as any)[format] === true : false;
   };
 
-  const toggleMark = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const isCurrentlyActive = isActive();
-
-    if (isCurrentlyActive) {
+  const toggleMark = (format: string) => {
+    if (isMarkActive(format)) {
       SlateEditor.removeMark(editor, format);
     } else {
       SlateEditor.addMark(editor, format, true);
     }
   };
 
-  return (
-    <button
-      className={`toolbar-button ${isActive() ? 'active' : ''}`}
-      onMouseDown={toggleMark}
-      title={format}
-    >
-      {icon}
-    </button>
-  );
-}
-
-function BlockButton({ format, icon }: { format: string; icon: React.ReactNode }) {
-  const editor = useSlate();
-
-  const isActive = () => {
+  useEffect(() => {
+    const el = toolbarRef.current;
     const { selection } = editor;
-    if (!selection) return false;
 
-    const [match] = Array.from(
-      SlateEditor.nodes(editor, {
-        at: SlateEditor.unhangRange(editor, selection),
-        match: (n) => !SlateEditor.isEditor(n) && SlateElement.isElement(n) && (n as any).type === format,
-      })
-    );
+    if (!el) return;
 
-    return !!match;
-  };
+    if (!selection || !ReactEditor.isFocused(editor as ReactEditor) || Range.isCollapsed(selection)) {
+      el.style.opacity = '0';
+      el.style.pointerEvents = 'none';
+      return;
+    }
 
-  const toggleBlock = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const isCurrentlyActive = isActive();
+    try {
+      const domSelection = window.getSelection();
+      if (!domSelection || domSelection.rangeCount === 0) return;
 
-    Transforms.setNodes(
-      editor,
-      { type: isCurrentlyActive ? 'p' : format } as any,
-      { match: (n) => SlateElement.isElement(n) }
-    );
-  };
+      const domRange = domSelection.getRangeAt(0);
+      const rect = domRange.getBoundingClientRect();
+
+      el.style.opacity = '1';
+      el.style.pointerEvents = 'auto';
+      el.style.top = `${rect.top + window.pageYOffset - el.offsetHeight - 8}px`;
+      el.style.left = `${rect.left + window.pageXOffset + rect.width / 2 - el.offsetWidth / 2}px`;
+    } catch (error) {
+      // Selection not available yet
+    }
+  });
 
   return (
-    <button
-      className={`toolbar-button ${isActive() ? 'active' : ''}`}
-      onMouseDown={toggleBlock}
-      title={format}
-    >
-      {icon}
-    </button>
-  );
-}
-
-function Toolbar() {
-  return (
-    <div className="plate-toolbar">
-      <div className="toolbar-group">
-        <MarkButton format="bold" icon={<strong>B</strong>} />
-        <MarkButton format="italic" icon={<em>I</em>} />
-        <MarkButton format="underline" icon={<u>U</u>} />
-        <MarkButton format="strikethrough" icon={<s>S</s>} />
-        <MarkButton format="code" icon={'<>'} />
-      </div>
-
-      <div className="toolbar-divider" />
-
-      <div className="toolbar-group">
-        <BlockButton format="h1" icon="H1" />
-        <BlockButton format="h2" icon="H2" />
-        <BlockButton format="h3" icon="H3" />
-      </div>
-
-      <div className="toolbar-divider" />
-
-      <div className="toolbar-group">
-        <BlockButton format="ul" icon="•" />
-        <BlockButton format="ol" icon="1." />
-        <BlockButton format="blockquote" icon={'"'} />
-      </div>
+    <div ref={toolbarRef} className="floating-toolbar">
+      <button
+        onMouseDown={(e) => {
+          e.preventDefault();
+          toggleMark('bold');
+        }}
+        className={isMarkActive('bold') ? 'active' : ''}
+      >
+        <strong>B</strong>
+      </button>
+      <button
+        onMouseDown={(e) => {
+          e.preventDefault();
+          toggleMark('italic');
+        }}
+        className={isMarkActive('italic') ? 'active' : ''}
+      >
+        <em>I</em>
+      </button>
+      <button
+        onMouseDown={(e) => {
+          e.preventDefault();
+          toggleMark('underline');
+        }}
+        className={isMarkActive('underline') ? 'active' : ''}
+      >
+        <u>U</u>
+      </button>
+      <button
+        onMouseDown={(e) => {
+          e.preventDefault();
+          toggleMark('code');
+        }}
+        className={isMarkActive('code') ? 'active' : ''}
+      >
+        {'<>'}
+      </button>
     </div>
   );
 }
 
-// Custom leaf renderer for marks
+// Slash Command Menu Component
+function SlashMenu({
+  target,
+  onSelect,
+}: {
+  target: Range | null;
+  onSelect: (type: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  useEffect(() => {
+    if (target && ref.current) {
+      const el = ref.current;
+      try {
+        const domRange = ReactEditor.toDOMRange(useSlate() as any, target);
+        const rect = domRange.getBoundingClientRect();
+        el.style.top = `${rect.bottom + window.pageYOffset + 4}px`;
+        el.style.left = `${rect.left + window.pageXOffset}px`;
+      } catch (error) {
+        // Range not yet available
+      }
+    }
+  }, [target]);
+
+  if (!target) return null;
+
+  return (
+    <div ref={ref} className="slash-menu">
+      {SLASH_COMMANDS.map((cmd, index) => (
+        <div
+          key={cmd.key}
+          className={`slash-menu-item ${selectedIndex === index ? 'selected' : ''}`}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            onSelect(cmd.key);
+          }}
+          onMouseEnter={() => setSelectedIndex(index)}
+        >
+          <span className="slash-menu-icon">{cmd.icon}</span>
+          <div className="slash-menu-text">
+            <div className="slash-menu-label">{cmd.label}</div>
+            <div className="slash-menu-description">{cmd.description}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Block Element Component with drag handle
+const Element = ({ attributes, children, element }: any) => {
+  const [showHandle, setShowHandle] = useState(false);
+
+  const blockElement = () => {
+    switch (element.type) {
+      case 'h1':
+        return <h1 {...attributes}>{children}</h1>;
+      case 'h2':
+        return <h2 {...attributes}>{children}</h2>;
+      case 'h3':
+        return <h3 {...attributes}>{children}</h3>;
+      case 'blockquote':
+        return <blockquote {...attributes}>{children}</blockquote>;
+      case 'ul':
+        return <ul {...attributes}>{children}</ul>;
+      case 'ol':
+        return <ol {...attributes}>{children}</ol>;
+      case 'li':
+        return <li {...attributes}>{children}</li>;
+      case 'code':
+        return (
+          <pre {...attributes}>
+            <code>{children}</code>
+          </pre>
+        );
+      default:
+        return <p {...attributes}>{children}</p>;
+    }
+  };
+
+  return (
+    <div
+      className="editor-block"
+      onMouseEnter={() => setShowHandle(true)}
+      onMouseLeave={() => setShowHandle(false)}
+      contentEditable={false}
+    >
+      {showHandle && element.type !== 'li' && (
+        <div className="drag-handle" contentEditable={false}>
+          <span>⋮⋮</span>
+        </div>
+      )}
+      <div contentEditable suppressContentEditableWarning>
+        {blockElement()}
+      </div>
+    </div>
+  );
+};
+
+// Leaf Component for text formatting
 const Leaf = ({ attributes, children, leaf }: any) => {
-  if (leaf.bold) {
-    children = <strong>{children}</strong>;
-  }
-
-  if (leaf.italic) {
-    children = <em>{children}</em>;
-  }
-
-  if (leaf.underline) {
-    children = <u>{children}</u>;
-  }
-
-  if (leaf.strikethrough) {
-    children = <s>{children}</s>;
-  }
-
-  if (leaf.code) {
-    children = <code>{children}</code>;
-  }
+  if (leaf.bold) children = <strong>{children}</strong>;
+  if (leaf.italic) children = <em>{children}</em>;
+  if (leaf.underline) children = <u>{children}</u>;
+  if (leaf.strikethrough) children = <s>{children}</s>;
+  if (leaf.code) children = <code>{children}</code>;
 
   return <span {...attributes}>{children}</span>;
 };
 
-// Custom element renderer for blocks
-const Element = ({ attributes, children, element }: any) => {
-  switch (element.type) {
-    case 'h1':
-      return <h1 {...attributes}>{children}</h1>;
-    case 'h2':
-      return <h2 {...attributes}>{children}</h2>;
-    case 'h3':
-      return <h3 {...attributes}>{children}</h3>;
-    case 'blockquote':
-      return <blockquote {...attributes}>{children}</blockquote>;
-    case 'ul':
-      return <ul {...attributes}>{children}</ul>;
-    case 'ol':
-      return <ol {...attributes}>{children}</ol>;
-    case 'li':
-      return <li {...attributes}>{children}</li>;
-    default:
-      return <p {...attributes}>{children}</p>;
-  }
-};
-
 export function PlateEditor({ content = '', onChange, readOnly = false }: PlateEditorProps) {
-  // Create editor instance
   const [editor] = useState(() => withHistory(withReact(createEditor())));
+  const [slashMenuTarget, setSlashMenuTarget] = useState<Range | null>(null);
+  const lastLoadedContentRef = useRef(content);
 
   // Parse content to Slate value
   const parseContent = useCallback((text: string): Descendant[] => {
@@ -168,29 +233,21 @@ export function PlateEditor({ content = '', onChange, readOnly = false }: PlateE
       return [{ type: 'p', children: [{ text: '' }] }] as any;
     }
 
-    // Simple parsing - convert text to Slate nodes
     const lines = text.split('\n');
     return lines.map((line) => {
-      if (line.startsWith('# ')) {
-        return { type: 'h1', children: [{ text: line.slice(2) }] };
-      } else if (line.startsWith('## ')) {
-        return { type: 'h2', children: [{ text: line.slice(3) }] };
-      } else if (line.startsWith('### ')) {
-        return { type: 'h3', children: [{ text: line.slice(4) }] };
-      } else if (line.startsWith('> ')) {
-        return { type: 'blockquote', children: [{ text: line.slice(2) }] };
-      } else if (line.startsWith('- ') || line.startsWith('* ')) {
+      if (line.startsWith('# ')) return { type: 'h1', children: [{ text: line.slice(2) }] };
+      if (line.startsWith('## ')) return { type: 'h2', children: [{ text: line.slice(3) }] };
+      if (line.startsWith('### ')) return { type: 'h3', children: [{ text: line.slice(4) }] };
+      if (line.startsWith('> ')) return { type: 'blockquote', children: [{ text: line.slice(2) }] };
+      if (line.startsWith('```')) return { type: 'code', children: [{ text: line.slice(3) }] };
+      if (line.startsWith('- ') || line.startsWith('* ')) {
         return { type: 'li', children: [{ text: line.slice(2) }] };
-      } else {
-        return { type: 'p', children: [{ text: line }] };
       }
+      return { type: 'p', children: [{ text: line }] };
     }) as any;
   }, []);
 
   const initialValue = useMemo(() => parseContent(content), [content, parseContent]);
-
-  // Track the last loaded content to detect document changes
-  const lastLoadedContentRef = useRef(content);
 
   // Serialize Slate value back to text
   const serializeToText = useCallback((nodes: Descendant[]) => {
@@ -205,24 +262,18 @@ export function PlateEditor({ content = '', onChange, readOnly = false }: PlateE
           .join('');
 
         switch (node.type) {
-          case 'h1':
-            return `# ${text}`;
-          case 'h2':
-            return `## ${text}`;
-          case 'h3':
-            return `### ${text}`;
-          case 'blockquote':
-            return `> ${text}`;
-          case 'li':
-            return `- ${text}`;
-          default:
-            return text;
+          case 'h1': return `# ${text}`;
+          case 'h2': return `## ${text}`;
+          case 'h3': return `### ${text}`;
+          case 'blockquote': return `> ${text}`;
+          case 'code': return `\`\`\`${text}`;
+          case 'li': return `- ${text}`;
+          default: return text;
         }
       })
       .join('\n');
   }, []);
 
-  // Handle changes
   const handleChange = useCallback(
     (newValue: Descendant[]) => {
       if (!onChange || readOnly) return;
@@ -232,20 +283,14 @@ export function PlateEditor({ content = '', onChange, readOnly = false }: PlateE
     [onChange, readOnly, serializeToText]
   );
 
-  // Reset editor value ONLY when a different document is loaded (not on every keystroke)
+  // Reset editor when document changes
   useEffect(() => {
-    // Only reset if the content actually changed externally (not from typing)
     if (content !== lastLoadedContentRef.current) {
       const newValue = initialValue;
-
-      // Properly reset the editor
       editor.children = newValue;
       editor.selection = null;
       editor.history = { redos: [], undos: [] };
-
-      // Force a re-render
       editor.onChange();
-
       lastLoadedContentRef.current = content;
     }
   }, [content, initialValue, editor]);
@@ -253,242 +298,368 @@ export function PlateEditor({ content = '', onChange, readOnly = false }: PlateE
   const renderElement = useCallback((props: any) => <Element {...props} />, []);
   const renderLeaf = useCallback((props: any) => <Leaf {...props} />, []);
 
+  // Handle keyboard shortcuts and slash commands
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      const { selection } = editor;
+
+      // Slash command detection
+      if (event.key === '/' && selection && Range.isCollapsed(selection)) {
+        setSlashMenuTarget(selection);
+        return;
+      }
+
+      // Close slash menu on Escape
+      if (event.key === 'Escape' && slashMenuTarget) {
+        setSlashMenuTarget(null);
+        return;
+      }
+
+      // Keyboard shortcuts
+      if (event.metaKey || event.ctrlKey) {
+        switch (event.key) {
+          case 'b':
+            event.preventDefault();
+            SlateEditor.addMark(editor, 'bold', true);
+            return;
+          case 'i':
+            event.preventDefault();
+            SlateEditor.addMark(editor, 'italic', true);
+            return;
+          case 'u':
+            event.preventDefault();
+            SlateEditor.addMark(editor, 'underline', true);
+            return;
+          case '`':
+            event.preventDefault();
+            SlateEditor.addMark(editor, 'code', true);
+            return;
+        }
+      }
+
+      // Markdown shortcuts (autoformatting)
+      if (event.key === ' ' && selection && Range.isCollapsed(selection)) {
+        const { anchor } = selection;
+        const block = SlateEditor.above(editor, {
+          match: (n) => SlateElement.isElement(n) && (editor as any).isBlock(n),
+        });
+
+        if (block) {
+          const [, path] = block;
+          const start = SlateEditor.start(editor, path);
+          const range = { anchor, focus: start };
+          const beforeText = SlateEditor.string(editor, range);
+
+          // Check for markdown patterns
+          const patterns: { [key: string]: string } = {
+            '#': 'h1',
+            '##': 'h2',
+            '###': 'h3',
+            '>': 'blockquote',
+            '-': 'li',
+            '*': 'li',
+            '```': 'code',
+          };
+
+          for (const [pattern, type] of Object.entries(patterns)) {
+            if (beforeText === pattern) {
+              event.preventDefault();
+              Transforms.delete(editor, { at: range });
+              Transforms.setNodes(editor, { type } as any, { match: (n) => SlateElement.isElement(n) });
+              return;
+            }
+          }
+        }
+      }
+    },
+    [editor, slashMenuTarget]
+  );
+
+  const handleSlashSelect = useCallback(
+    (type: string) => {
+      if (slashMenuTarget) {
+        Transforms.select(editor, slashMenuTarget);
+        Transforms.delete(editor); // Remove the "/"
+        Transforms.setNodes(editor, { type } as any, {
+          match: (n) => SlateElement.isElement(n),
+        });
+        setSlashMenuTarget(null);
+      }
+    },
+    [editor, slashMenuTarget]
+  );
+
   return (
-    <div className="plate-editor-container">
+    <div className="notion-editor-container">
       <Slate editor={editor} initialValue={initialValue} onChange={handleChange}>
-        <Toolbar />
+        <FloatingToolbar />
+        <SlashMenu target={slashMenuTarget} onSelect={handleSlashSelect} />
         <Editable
-          className="plate-editor-content"
+          className="notion-editor-content"
           readOnly={readOnly}
-          placeholder="Start writing..."
+          placeholder="Type '/' for commands, or start writing..."
           renderElement={renderElement}
           renderLeaf={renderLeaf}
+          onKeyDown={handleKeyDown}
           spellCheck
           autoFocus
         />
       </Slate>
 
       <style>{`
-        .plate-editor-container {
+        .notion-editor-container {
           display: flex;
           flex-direction: column;
           height: 100%;
           width: 100%;
-          background: rgba(0, 0, 0, 0.2);
+          background: #ffffff;
+          position: relative;
         }
 
-        .plate-toolbar {
-          display: flex;
-          gap: 0.5rem;
-          padding: 0.75rem 1rem;
-          background: rgba(0, 0, 0, 0.3);
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-          flex-wrap: wrap;
-          flex-shrink: 0;
-        }
-
-        .toolbar-group {
-          display: flex;
-          gap: 0.25rem;
-        }
-
-        .toolbar-divider {
-          width: 1px;
-          background: rgba(255, 255, 255, 0.1);
-          margin: 0 0.5rem;
-        }
-
-        .toolbar-button {
-          padding: 0.5rem 0.75rem;
-          background: rgba(255, 255, 255, 0.1);
-          border: 1px solid rgba(255, 255, 255, 0.15);
-          border-radius: 0.25rem;
-          color: rgba(255, 255, 255, 0.9);
-          cursor: pointer;
-          transition: all 0.2s;
-          font-size: 0.875rem;
-          font-weight: 600;
-          min-width: 2rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .toolbar-button:hover {
-          background: rgba(255, 255, 255, 0.15);
-          transform: translateY(-1px);
-        }
-
-        .toolbar-button.active {
-          background: rgba(102, 126, 234, 0.4);
-          border-color: rgba(102, 126, 234, 0.6);
-        }
-
-        .toolbar-button:active {
-          transform: translateY(0);
-        }
-
-        .plate-editor-content {
+        .notion-editor-content {
           flex: 1;
-          padding: 3rem 4rem;
+          padding: 6rem 10rem;
+          max-width: 900px;
+          width: 100%;
+          margin: 0 auto;
           overflow-y: auto;
-          color: rgba(255, 255, 255, 0.95);
-          font-family: 'Charter', 'Iowan Old Style', 'Georgia', 'Cambria', 'Times New Roman', serif;
-          font-size: 1.125rem;
-          line-height: 1.75;
-          letter-spacing: 0.01em;
-          -webkit-font-smoothing: antialiased;
-          -moz-osx-font-smoothing: grayscale;
+          color: rgb(55, 53, 47);
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, 'Apple Color Emoji', Arial, sans-serif, 'Segoe UI Emoji', 'Segoe UI Symbol';
+          font-size: 16px;
+          line-height: 1.5;
+          caret-color: rgb(55, 53, 47);
         }
 
-        .plate-editor-content:focus {
+        .notion-editor-content:focus {
           outline: none;
         }
 
-        .plate-editor-content [data-slate-placeholder] {
-          color: rgba(255, 255, 255, 0.25) !important;
-          font-style: italic;
+        .notion-editor-content [data-slate-placeholder] {
+          color: rgba(55, 53, 47, 0.4) !important;
+          font-style: normal;
           opacity: 1 !important;
-          top: 3rem !important;
-          left: 4rem !important;
+          top: 6rem !important;
+          left: 10rem !important;
+          user-select: none;
+          pointer-events: none;
         }
 
-        /* Heading styles */
-        .plate-editor-content h1 {
+        /* Block wrapper with drag handle */
+        .editor-block {
+          position: relative;
+          margin: 1px 0;
+        }
+
+        .drag-handle {
+          position: absolute;
+          left: -2rem;
+          top: 0.25rem;
+          width: 1.5rem;
+          height: 1.5rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: grab;
+          opacity: 0.3;
+          transition: opacity 0.2s;
+          font-size: 1rem;
+          color: rgba(55, 53, 47, 0.4);
+          user-select: none;
+        }
+
+        .drag-handle:hover {
+          opacity: 0.8;
+        }
+
+        .drag-handle:active {
+          cursor: grabbing;
+        }
+
+        /* Floating Toolbar */
+        .floating-toolbar {
+          position: absolute;
+          z-index: 100;
+          padding: 0.25rem;
+          background: rgb(55, 53, 47);
+          border-radius: 6px;
+          box-shadow: rgba(15, 15, 15, 0.05) 0px 0px 0px 1px, rgba(15, 15, 15, 0.1) 0px 3px 6px, rgba(15, 15, 15, 0.2) 0px 9px 24px;
+          display: flex;
+          gap: 2px;
+          transition: opacity 0.15s;
+          opacity: 0;
+          pointer-events: none;
+        }
+
+        .floating-toolbar button {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 32px;
+          height: 32px;
+          background: transparent;
+          border: none;
+          border-radius: 4px;
+          color: white;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 500;
+          transition: background 0.15s;
+        }
+
+        .floating-toolbar button:hover {
+          background: rgba(255, 255, 255, 0.1);
+        }
+
+        .floating-toolbar button.active {
+          background: rgba(35, 131, 226, 0.28);
+        }
+
+        /* Slash Command Menu */
+        .slash-menu {
+          position: absolute;
+          z-index: 100;
+          background: white;
+          border-radius: 6px;
+          box-shadow: rgba(15, 15, 15, 0.05) 0px 0px 0px 1px, rgba(15, 15, 15, 0.1) 0px 3px 6px, rgba(15, 15, 15, 0.2) 0px 9px 24px;
+          padding: 0.5rem;
+          min-width: 280px;
+          max-height: 400px;
+          overflow-y: auto;
+        }
+
+        .slash-menu-item {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 0.5rem 0.75rem;
+          border-radius: 4px;
+          cursor: pointer;
+          transition: background 0.15s;
+        }
+
+        .slash-menu-item:hover,
+        .slash-menu-item.selected {
+          background: rgba(55, 53, 47, 0.08);
+        }
+
+        .slash-menu-icon {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 2rem;
+          height: 2rem;
+          background: rgba(55, 53, 47, 0.06);
+          border-radius: 4px;
+          font-size: 1rem;
+          font-weight: 600;
+          flex-shrink: 0;
+        }
+
+        .slash-menu-text {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .slash-menu-label {
+          font-size: 14px;
+          font-weight: 500;
+          color: rgb(55, 53, 47);
+        }
+
+        .slash-menu-description {
+          font-size: 12px;
+          color: rgba(55, 53, 47, 0.6);
+          margin-top: 2px;
+        }
+
+        /* Typography */
+        .notion-editor-content h1 {
           font-size: 2.5rem;
           font-weight: 700;
           margin: 2rem 0 1rem;
           line-height: 1.2;
+          color: rgb(55, 53, 47);
         }
 
-        .plate-editor-content h2 {
-          font-size: 2rem;
+        .notion-editor-content h2 {
+          font-size: 1.875rem;
           font-weight: 600;
           margin: 1.75rem 0 0.75rem;
           line-height: 1.3;
+          color: rgb(55, 53, 47);
         }
 
-        .plate-editor-content h3 {
+        .notion-editor-content h3 {
           font-size: 1.5rem;
           font-weight: 600;
           margin: 1.5rem 0 0.5rem;
           line-height: 1.4;
+          color: rgb(55, 53, 47);
         }
 
-        .plate-editor-content h4 {
-          font-size: 1.25rem;
-          font-weight: 600;
-          margin: 1.25rem 0 0.5rem;
+        .notion-editor-content p {
+          margin: 4px 0;
+          color: rgb(55, 53, 47);
+          line-height: 1.6;
         }
 
-        .plate-editor-content h5,
-        .plate-editor-content h6 {
-          font-size: 1.125rem;
-          font-weight: 600;
-          margin: 1rem 0 0.5rem;
+        .notion-editor-content blockquote {
+          border-left: 3px solid rgb(55, 53, 47);
+          padding-left: 1rem;
+          margin: 4px 0;
+          color: rgb(55, 53, 47);
+          font-size: 1rem;
         }
 
-        /* Paragraph */
-        .plate-editor-content p {
-          margin: 0.75rem 0;
+        .notion-editor-content ul,
+        .notion-editor-content ol {
+          margin: 4px 0;
+          padding-left: 1.75rem;
         }
 
-        /* Blockquote */
-        .plate-editor-content blockquote {
-          border-left: 4px solid rgba(102, 126, 234, 0.5);
-          padding-left: 1.5rem;
-          margin: 1.5rem 0;
-          font-style: italic;
-          color: rgba(255, 255, 255, 0.8);
+        .notion-editor-content li {
+          margin: 2px 0;
+          padding-left: 0.25rem;
         }
 
-        /* Lists */
-        .plate-editor-content ul,
-        .plate-editor-content ol {
-          margin: 1rem 0;
-          padding-left: 2rem;
+        .notion-editor-content code {
+          background: rgba(135, 131, 120, 0.15);
+          color: #eb5757;
+          padding: 0.2em 0.4em;
+          border-radius: 3px;
+          font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+          font-size: 85%;
         }
 
-        .plate-editor-content li {
-          margin: 0.5rem 0;
-        }
-
-        /* Code */
-        .plate-editor-content code {
-          background: rgba(255, 255, 255, 0.1);
-          padding: 0.2rem 0.4rem;
-          border-radius: 0.25rem;
-          font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-          font-size: 0.9em;
-        }
-
-        .plate-editor-content pre {
-          background: rgba(0, 0, 0, 0.3);
+        .notion-editor-content pre {
+          background: rgb(247, 246, 243);
+          border-radius: 3px;
           padding: 1rem;
-          border-radius: 0.5rem;
+          margin: 8px 0;
           overflow-x: auto;
-          margin: 1.5rem 0;
         }
 
-        .plate-editor-content pre code {
+        .notion-editor-content pre code {
           background: none;
+          color: rgb(55, 53, 47);
           padding: 0;
+          font-size: 14px;
+          line-height: 1.5;
         }
 
-        /* Table */
-        .plate-editor-content table {
-          border-collapse: collapse;
-          width: 100%;
-          margin: 1.5rem 0;
-        }
-
-        .plate-editor-content th,
-        .plate-editor-content td {
-          border: 1px solid rgba(255, 255, 255, 0.2);
-          padding: 0.75rem;
-          text-align: left;
-        }
-
-        .plate-editor-content th {
-          background: rgba(102, 126, 234, 0.2);
+        .notion-editor-content strong {
           font-weight: 600;
         }
 
-        /* Links */
-        .plate-editor-content a {
-          color: #667eea;
-          text-decoration: underline;
-        }
-
-        /* Images */
-        .plate-editor-content img {
-          max-width: 100%;
-          height: auto;
-          border-radius: 0.5rem;
-          margin: 1.5rem 0;
-        }
-
-        /* Horizontal rule */
-        .plate-editor-content hr {
-          border: none;
-          border-top: 2px solid rgba(255, 255, 255, 0.1);
-          margin: 2rem 0;
-        }
-
-        /* Text formatting */
-        .plate-editor-content strong {
-          font-weight: 700;
-        }
-
-        .plate-editor-content em {
+        .notion-editor-content em {
           font-style: italic;
         }
 
-        .plate-editor-content u {
+        .notion-editor-content u {
           text-decoration: underline;
         }
 
-        .plate-editor-content s {
+        .notion-editor-content s {
           text-decoration: line-through;
         }
       `}</style>
