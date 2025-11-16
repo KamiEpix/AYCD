@@ -8,8 +8,11 @@
   let isSaving = $state(false);
   let hasUnsavedChanges = $state(false);
   let liveWordCount = $state(0);
+  let characterCount = $state(0);
+  let lineCount = $state(1);
   let autosaveTimer: number | undefined;
   let lastSavedContent = '';
+  let lastAutosaveTime = $state<number>(0);
 
   // Load documents when workspace opens
   onMount(async () => {
@@ -25,7 +28,7 @@
     // Cleanup
     window.removeEventListener('keydown', handleKeyboardShortcuts);
     if (autosaveTimer) {
-      clearInterval(autosaveTimer);
+      clearTimeout(autosaveTimer);
     }
   });
 
@@ -39,36 +42,26 @@
     }
   });
 
-  // Track content changes for dirty state
+  // Track content changes for dirty state and trigger autosave
   $effect(() => {
     if (documentStore.current) {
       hasUnsavedChanges = editorContent !== lastSavedContent;
       liveWordCount = countWords(editorContent);
-    }
-  });
+      characterCount = editorContent.length;
+      lineCount = editorContent.split('\n').length;
 
-  // Setup autosave timer when document opens
-  $effect(() => {
-    if (documentStore.current) {
-      // Clear existing timer
-      if (autosaveTimer) {
-        clearInterval(autosaveTimer);
-      }
-
-      // Set up new autosave timer (30 seconds)
-      autosaveTimer = window.setInterval(() => {
-        if (hasUnsavedChanges && !isSaving) {
-          handleSave(true); // true = autosave
+      // Debounced autosave: save 2 seconds after typing stops
+      if (hasUnsavedChanges && !isSaving) {
+        if (autosaveTimer) {
+          clearTimeout(autosaveTimer);
         }
-      }, 30000);
-    } else {
-      // Clear timer when no document
-      if (autosaveTimer) {
-        clearInterval(autosaveTimer);
-        autosaveTimer = undefined;
+        autosaveTimer = window.setTimeout(() => {
+          handleSave(true);
+        }, 2000); // 2 seconds after typing stops
       }
     }
   });
+
 
   function handleCloseProject() {
     documentStore.clearDocuments();
@@ -83,6 +76,7 @@
       await documentStore.saveCurrentDocument(editorContent);
       lastSavedContent = editorContent;
       hasUnsavedChanges = false;
+      lastAutosaveTime = Date.now();
 
       if (!isAutosave) {
         console.log('Document saved successfully');
@@ -138,24 +132,35 @@
             </span>
           </div>
           <div class="editor-actions">
-            <span class="word-count">
-              {liveWordCount} words
+            <div class="stats">
+              <span class="stat-item">{liveWordCount} words</span>
+              <span class="stat-separator">·</span>
+              <span class="stat-item">{characterCount} characters</span>
               {#if hasUnsavedChanges}
                 <span class="unsaved-indicator" title="Unsaved changes">●</span>
+              {:else if lastAutosaveTime > 0}
+                <span class="saved-indicator" title="All changes saved">✓</span>
               {/if}
-            </span>
+            </div>
             <button class="btn-save" onclick={handleSave} disabled={isSaving || !hasUnsavedChanges}>
-              {isSaving ? 'Saving...' : hasUnsavedChanges ? 'Save *' : 'Saved'}
+              {isSaving ? 'Saving...' : hasUnsavedChanges ? 'Save' : 'Saved'}
             </button>
             <button class="btn-close-doc" onclick={handleCloseDocument}>Close</button>
           </div>
         </div>
-        <textarea
-          class="editor"
-          bind:value={editorContent}
-          placeholder="Start writing..."
-          spellcheck="true"
-        ></textarea>
+        <div class="editor-container">
+          <div class="line-numbers">
+            {#each Array(lineCount) as _, i}
+              <div class="line-number">{i + 1}</div>
+            {/each}
+          </div>
+          <textarea
+            class="editor"
+            bind:value={editorContent}
+            placeholder="Start writing..."
+            spellcheck="true"
+          ></textarea>
+        </div>
       {:else}
         <div class="no-document">
           <p>Select or create a document to start writing</p>
@@ -257,18 +262,33 @@
     gap: 1rem;
   }
 
-  .word-count {
-    font-size: 0.875rem;
-    color: rgba(255, 255, 255, 0.5);
+  .stats {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .stat-item {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-separator {
+    opacity: 0.3;
   }
 
   .unsaved-indicator {
     color: #f59e0b;
     font-size: 0.5rem;
     animation: pulse 2s ease-in-out infinite;
+    margin-left: 0.25rem;
+  }
+
+  .saved-indicator {
+    color: #10b981;
+    font-size: 0.75rem;
+    margin-left: 0.25rem;
   }
 
   @keyframes pulse {
@@ -310,16 +330,43 @@
     background: rgba(255, 255, 255, 0.15);
   }
 
+  .editor-container {
+    flex: 1;
+    display: flex;
+    background: rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+  }
+
+  .line-numbers {
+    padding: 3rem 1rem 3rem 2rem;
+    background: rgba(0, 0, 0, 0.15);
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    user-select: none;
+    min-width: 3.5rem;
+    text-align: right;
+  }
+
+  .line-number {
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+    font-size: 0.875rem;
+    line-height: 1.96875rem; /* Matches editor line-height of 1.75 * 1.125rem */
+    color: rgba(255, 255, 255, 0.25);
+    height: 1.96875rem;
+  }
+
   .editor {
     flex: 1;
-    padding: 2rem;
-    background: rgba(0, 0, 0, 0.1);
+    padding: 3rem 4rem 3rem 2rem;
+    background: transparent;
     border: none;
-    color: white;
-    font-family: 'Georgia', serif;
+    color: rgba(255, 255, 255, 0.95);
+    font-family: 'Charter', 'Iowan Old Style', 'Georgia', 'Cambria', 'Times New Roman', serif;
     font-size: 1.125rem;
-    line-height: 1.8;
+    line-height: 1.75;
     resize: none;
+    letter-spacing: 0.01em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   .editor:focus {
@@ -327,7 +374,8 @@
   }
 
   .editor::placeholder {
-    color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.25);
+    font-style: italic;
   }
 
   .no-document {
