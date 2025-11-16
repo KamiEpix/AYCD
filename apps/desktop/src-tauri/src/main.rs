@@ -14,6 +14,11 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             greet,
+            commands::projects::create_project,
+            commands::projects::open_project,
+            commands::projects::list_projects,
+            commands::projects::get_projects_root,
+            commands::projects::update_project,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
