@@ -87,9 +87,10 @@ function ToolbarButton({ label, onClick, active, icon, disabled }: ToolbarButton
       className={`aycd-toolbar-button ${active ? 'active' : ''}`}
       onClick={onClick}
       disabled={disabled}
+      aria-label={label}
+      title={label}
     >
-      {icon && <span className="aycd-toolbar-icon">{icon}</span>}
-      <span>{label}</span>
+      {icon ?? <span className="aycd-toolbar-icon">{label.slice(0, 1)}</span>}
     </button>
   );
 }
@@ -116,6 +117,7 @@ function HighlightSwatches({
           onClick={() => onSelect(tone.id)}
           disabled={readOnly}
           aria-label={`Highlight ${tone.label}`}
+          title={tone.label}
         />
       ))}
       <button type="button" className="highlight-clear" onClick={onClear} disabled={readOnly}>
@@ -213,63 +215,74 @@ function EditorToolbar({ readOnly }: { readOnly?: boolean }) {
   };
 
   return (
-    <div className="aycd-toolbar-row">
-      <div className="aycd-toolbar-group">
-        <BlockSelect editor={editor} readOnly={readOnly} />
-      </div>
-      <div className="aycd-toolbar-group">
-        <ToolbarButton
-          label="Bold"
-          icon={<span className="aycd-letter">B</span>}
-          onClick={() => toggleMark(editor, 'bold')}
-          active={isMarkActive(editor, 'bold')}
-          disabled={readOnly}
-        />
-        <ToolbarButton
-          label="Italic"
-          icon={<span className="aycd-letter">I</span>}
-          onClick={() => toggleMark(editor, 'italic')}
-          active={isMarkActive(editor, 'italic')}
-          disabled={readOnly}
-        />
-        <ToolbarButton
-          label="Underline"
-          icon={<span className="aycd-letter">U</span>}
-          onClick={() => toggleMark(editor, 'underline')}
-          active={isMarkActive(editor, 'underline')}
-          disabled={readOnly}
-        />
-        <ToolbarButton
-          label="Strike"
-          icon={<span className="aycd-letter">S</span>}
-          onClick={() => toggleMark(editor, 'strikethrough')}
-          active={isMarkActive(editor, 'strikethrough')}
-          disabled={readOnly}
-        />
-        <ToolbarButton
-          label="Highlight"
-          icon={<span className="aycd-dot" />}
-          onClick={() => toggleMark(editor, 'highlight')}
-          active={isMarkActive(editor, 'highlight')}
-          disabled={readOnly}
-        />
-        <ToolbarButton
-          label="Code"
-          icon={<span className="aycd-letter">{`</>`}</span>}
-          onClick={() => toggleMark(editor, 'code')}
-          active={isMarkActive(editor, 'code')}
-          disabled={readOnly}
-        />
-        <ToolbarButton
-          label="Kbd"
-          icon={<span className="aycd-letter">⌘</span>}
-          onClick={() => toggleMark(editor, 'kbd')}
-          active={isMarkActive(editor, 'kbd')}
-          disabled={readOnly}
-        />
-      </div>
-      <div className="aycd-toolbar-group spread">
-        <HighlightSwatches active={activeHighlight} onSelect={applyHighlight} onClear={clearHighlight} readOnly={readOnly} />
+    <div className="aycd-toolbar">
+      <div className="toolbar-track">
+        <div className="toolbar-group block-picker">
+          <BlockSelect editor={editor} readOnly={readOnly} />
+        </div>
+
+        <span className="toolbar-divider" />
+
+        <div className="toolbar-group icon-row">
+          <ToolbarButton
+            label="Bold"
+            icon={<span className="aycd-letter">B</span>}
+            onClick={() => toggleMark(editor, 'bold')}
+            active={isMarkActive(editor, 'bold')}
+            disabled={readOnly}
+          />
+          <ToolbarButton
+            label="Italic"
+            icon={<span className="aycd-letter">I</span>}
+            onClick={() => toggleMark(editor, 'italic')}
+            active={isMarkActive(editor, 'italic')}
+            disabled={readOnly}
+          />
+          <ToolbarButton
+            label="Underline"
+            icon={<span className="aycd-letter">U</span>}
+            onClick={() => toggleMark(editor, 'underline')}
+            active={isMarkActive(editor, 'underline')}
+            disabled={readOnly}
+          />
+          <ToolbarButton
+            label="Strikethrough"
+            icon={<span className="aycd-letter">S</span>}
+            onClick={() => toggleMark(editor, 'strikethrough')}
+            active={isMarkActive(editor, 'strikethrough')}
+            disabled={readOnly}
+          />
+        </div>
+
+        <span className="toolbar-divider" />
+
+        <div className="toolbar-group icon-row">
+          <ToolbarButton
+            label="Highlight"
+            icon={<span className="aycd-dot" />}
+            onClick={() => toggleMark(editor, 'highlight')}
+            active={isMarkActive(editor, 'highlight')}
+            disabled={readOnly}
+          />
+          <ToolbarButton
+            label="Code"
+            icon={<span className="aycd-letter">{'</>'}</span>}
+            onClick={() => toggleMark(editor, 'code')}
+            active={isMarkActive(editor, 'code')}
+            disabled={readOnly}
+          />
+          <ToolbarButton
+            label="Keyboard"
+            icon={<span className="aycd-letter">K</span>}
+            onClick={() => toggleMark(editor, 'kbd')}
+            active={isMarkActive(editor, 'kbd')}
+            disabled={readOnly}
+          />
+        </div>
+
+        <div className="toolbar-group swatches">
+          <HighlightSwatches active={activeHighlight} onSelect={applyHighlight} onClear={clearHighlight} readOnly={readOnly} />
+        </div>
       </div>
     </div>
   );
@@ -327,13 +340,19 @@ export function PlateEditor({ content = '', onChange, readOnly = false, placehol
   const isApplyingExternalValue = useRef(false);
   const editorPaneRef = useRef<HTMLDivElement | null>(null);
   const [selectionRect, setSelectionRect] = useState<{ top: number; left: number } | null>(null);
+  const lastSerializedValueRef = useRef<string>(content);
 
   useEffect(() => {
+    if (lastSerializedValueRef.current === content) {
+      return;
+    }
+
     const value = parseContentToValue(content);
     isApplyingExternalValue.current = true;
     editor.tf.setValue(value as any);
     editor.selection = null;
     editor.history = { redos: [], undos: [] } as any;
+    lastSerializedValueRef.current = content;
     requestAnimationFrame(() => {
       isApplyingExternalValue.current = false;
     });
@@ -345,7 +364,9 @@ export function PlateEditor({ content = '', onChange, readOnly = false, placehol
         return;
       }
 
-      onChange?.(serializeValue(value), formatNodesToPlainText(value));
+      const serialized = serializeValue(value);
+      lastSerializedValueRef.current = serialized;
+      onChange?.(serialized, formatNodesToPlainText(value));
     },
     [onChange]
   );
@@ -410,7 +431,7 @@ export function PlateEditor({ content = '', onChange, readOnly = false, placehol
                 U
               </button>
               <button type="button" onClick={() => toggleMark(editor, 'highlight')} className={isMarkActive(editor, 'highlight') ? 'active' : ''}>
-                ✺
+                H
               </button>
             </div>
             <HighlightSwatches active={activeHighlight} onSelect={applyHighlight} onClear={clearHighlight} />

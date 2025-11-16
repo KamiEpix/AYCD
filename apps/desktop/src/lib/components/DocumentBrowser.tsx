@@ -28,7 +28,7 @@ const sectionColorMap: Partial<Record<string, string>> = {
 
 export function DocumentBrowser() {
   const { filteredDocuments, current, isLoading, mode, createDocument, openDocument, loadDocuments } = useDocument();
-  const { current: currentProject } = useProject();
+  const { current: currentProject, closeProject } = useProject();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newDocTitle, setNewDocTitle] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(sectionMap[mode][0]);
@@ -97,16 +97,26 @@ export function DocumentBrowser() {
     setExpandedSections((prev) => ({ ...prev, [category]: !prev[category] }));
   };
 
+  const handleLeaveProject = () => {
+    closeProject();
+  };
+
   return (
     <aside className="document-browser">
       <header className="browser-heading">
         <div>
-          <p className="browser-eyebrow">Worlds & drafts</p>
-          <h2>Project navigator</h2>
+          <p className="browser-eyebrow">Active {mode === 'world' ? 'world bible' : 'narrative workspace'}</p>
+          <h2>{currentProject?.name ?? 'Untitled project'}</h2>
+          <p className="browser-subtle">{currentProject?.path ?? 'No project path selected'}</p>
         </div>
-        <button className="ghost" onClick={handleRefresh}>
-          Sync
-        </button>
+        <div className="browser-heading-actions">
+          <button className="ghost" onClick={handleRefresh}>
+            Sync
+          </button>
+          <button className="ghost danger" onClick={handleLeaveProject}>
+            Leave
+          </button>
+        </div>
       </header>
 
       <div className="browser-controls">

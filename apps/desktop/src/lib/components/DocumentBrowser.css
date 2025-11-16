@@ -1,24 +1,30 @@
 .document-browser {
-  width: 320px;
-  min-width: 280px;
-  max-width: 360px;
+  width: 360px;
+  min-width: 300px;
+  max-width: 380px;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
   padding: 1.5rem 1.5rem 1.25rem;
-  background: linear-gradient(180deg, rgba(26, 17, 12, 0.95), rgba(12, 7, 5, 0.85));
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(26, 17, 12, 0.98), rgba(10, 6, 4, 0.94));
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .browser-heading {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 0.75rem;
 }
 
 .browser-heading h2 {
   font-size: 1.25rem;
   font-weight: 600;
+}
+
+.browser-heading-actions {
+  display: flex;
+  gap: 0.35rem;
 }
 
 .browser-eyebrow {
@@ -27,6 +33,12 @@
   letter-spacing: 0.3em;
   color: var(--aycd-text-muted);
   margin-bottom: 0.25rem;
+}
+
+.browser-subtle {
+  font-size: 0.75rem;
+  color: var(--aycd-text-muted);
+  margin-top: 0.1rem;
 }
 
 .browser-heading .ghost {
@@ -40,6 +52,11 @@
 
 .browser-heading .ghost:hover {
   border-color: rgba(255, 255, 255, 0.3);
+}
+
+.browser-heading .ghost.danger {
+  border-color: rgba(255, 122, 106, 0.45);
+  color: #ffb8ac;
 }
 
 .browser-controls {

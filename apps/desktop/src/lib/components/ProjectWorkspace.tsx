@@ -5,6 +5,13 @@ import { useDocument } from '@/lib/contexts/DocumentContext';
 import { DocumentBrowser } from './DocumentBrowser';
 import { PlateEditor } from '@aycd/editor';
 import './ProjectWorkspace.css';
+import type { WebviewWindow } from '@tauri-apps/api/window';
+
+declare global {
+  interface Window {
+    __TAURI_INTERNALS__?: unknown;
+  }
+}
 
 const toPlainText = (content: string): string => {
   if (!content) return '';
@@ -33,8 +40,22 @@ const getDocumentCategory = (path?: string) => {
   return segments[segments.length - 2];
 };
 
+const defaultPinnedOptions = {
+  trackRevisions: true,
+  focusMode: false,
+  anchorTimeline: true,
+};
+
+const highlightLegend = [
+  { id: 'amber', label: 'Beats & pacing', copy: 'Use for major plot swings and rhythmic cues.' },
+  { id: 'sand', label: 'Lore & canon', copy: 'Mark bible notes that need to sync across worlds.' },
+  { id: 'rose', label: 'Relationships', copy: 'Tag character chemistry, tensions, and threads.' },
+  { id: 'teal', label: 'Systems', copy: 'Call out rules, abilities, and mechanics.' },
+  { id: 'plum', label: 'Needs revision', copy: 'Flag fragments that need a deeper rewrite.' },
+];
+
 export function ProjectWorkspace() {
-  const { current: currentProject, closeProject } = useProject();
+  const { current: currentProject } = useProject();
   const {
     current: currentDocument,
     loadDocuments,
@@ -52,9 +73,34 @@ export function ProjectWorkspace() {
   const [liveWordCount, setLiveWordCount] = useState(0);
   const [characterCount, setCharacterCount] = useState(0);
   const [lastAutosaveTime, setLastAutosaveTime] = useState(0);
+  const [windowControlsReady, setWindowControlsReady] = useState(false);
+  const [isWindowMaximized, setIsWindowMaximized] = useState(false);
 
   const lastSavedContentRef = useRef('');
   const autosaveTimerRef = useRef<number>();
+  const tauriWindowRef = useRef<WebviewWindow | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.__TAURI_INTERNALS__) {
+      return;
+    }
+
+    let disposed = false;
+    import('@tauri-apps/api/window').then(({ appWindow }) => {
+      if (disposed) return;
+      tauriWindowRef.current = appWindow;
+      setWindowControlsReady(true);
+      appWindow.isMaximized().then((result) => {
+        if (!disposed) {
+          setIsWindowMaximized(result);
+        }
+      });
+    });
+
+    return () => {
+      disposed = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (currentProject) {
@@ -130,10 +176,6 @@ export function ProjectWorkspace() {
     }
   };
 
-  const handleCloseProject = () => {
-    closeProject();
-  };
-
   const handleCloseDocument = () => {
     if (hasUnsavedChanges) {
       const confirmed = confirm('You have unsaved changes. Close without saving?');
@@ -142,30 +184,45 @@ export function ProjectWorkspace() {
     closeDocument();
   };
 
+  const handleWindowMinimize = useCallback(() => {
+    tauriWindowRef.current?.minimize();
+  }, []);
+
+  const handleWindowToggleMaximize = useCallback(async () => {
+    const instance = tauriWindowRef.current;
+    if (!instance) return;
+
+    const maximized = await instance.isMaximized();
+    if (maximized) {
+      await instance.unmaximize();
+      setIsWindowMaximized(false);
+    } else {
+      await instance.maximize();
+      setIsWindowMaximized(true);
+    }
+  }, []);
+
+  const handleWindowClose = useCallback(() => {
+    tauriWindowRef.current?.close();
+  }, []);
+
   const handleEditorChange = useCallback((serialized: string, plainText: string) => {
     setEditorContent(serialized);
     setEditorPlainText(plainText);
   }, []);
 
   const docCategory = useMemo(() => getDocumentCategory(currentDocument?.path), [currentDocument?.path]);
-  const autosaveCopy = useMemo(() => {
+  const syncCopy = useMemo(() => {
     if (hasUnsavedChanges) return 'Unsaved changes';
     if (lastAutosaveTime === 0) return 'Autosave waiting';
     return `Synced at ${new Date(lastAutosaveTime).toLocaleTimeString()}`;
   }, [hasUnsavedChanges, lastAutosaveTime]);
 
-  const [pinnedOptions, setPinnedOptions] = useState({
-    trackRevisions: true,
-    focusMode: false,
-    anchorTimeline: true,
-  });
+  const [pinnedOptions, setPinnedOptions] = useState(defaultPinnedOptions);
 
-  const navigatorDocuments = useMemo(() => {
-    return documents
-      .filter((doc) => doc.documentType === mode)
-      .sort((a, b) => b.modifiedAt - a.modifiedAt)
-      .slice(0, 6);
-  }, [documents, mode]);
+  const handleResetPinned = () => {
+    setPinnedOptions(defaultPinnedOptions);
+  };
 
   const outline = useMemo(() => {
     if (!editorContent) return [] as { id: string; title: string; level: number }[];
@@ -190,7 +247,16 @@ export function ProjectWorkspace() {
     }
   }, [editorContent]);
 
-  const dockTabs = navigatorDocuments;
+  const dockTabs = useMemo(() => {
+    const ordered: typeof documents = currentDocument ? [currentDocument] : [];
+    const recents = [...documents].sort((a, b) => b.modifiedAt - a.modifiedAt);
+    recents.forEach((doc) => {
+      if (!ordered.find((entry) => entry.path === doc.path)) {
+        ordered.push(doc);
+      }
+    });
+    return ordered.slice(0, 6);
+  }, [currentDocument, documents]);
 
   const togglePinnedOption = (key: keyof typeof pinnedOptions) => {
     setPinnedOptions((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -203,44 +269,61 @@ export function ProjectWorkspace() {
   };
 
   return (
-    <div className="workspace-shell">
-      <header className="workspace-titlebar" data-drag-region>
-        <div className="titlebar-left">
-          <span className="app-mark">AYCD Creator</span>
-          <div className="breadcrumbs">
-            <span>{currentProject?.name ?? 'Untitled project'}</span>
-            <span className="crumb">›</span>
-            <span className="muted">{currentDocument?.title ?? 'No document selected'}</span>
-          </div>
+    <div className="workspace-frame">
+      <header className="window-chrome" data-tauri-drag-region>
+        <div className="chrome-left">
+          <span className="chrome-project">{currentProject?.name ?? 'Select a project'}</span>
+          {currentDocument ? (
+            <>
+              <span className="chrome-separator">›</span>
+              <span className="chrome-document">{currentDocument.title}</span>
+            </>
+          ) : (
+            <span className="chrome-muted">Choose a document</span>
+          )}
         </div>
-        <div className="titlebar-center">
-          <button className="command-btn" onClick={handleCloseProject}>
-            Leave project
-          </button>
-        </div>
-        <div className="titlebar-right">
-          <div className="titlebar-stats">
-            <span>{liveWordCount.toLocaleString()} words</span>
-            <span className="dot" />
-            <span>{autosaveCopy}</span>
-          </div>
-          <div className="window-controls">
-            <button aria-label="Minimize" />
-            <button aria-label="Maximize" />
-            <button aria-label="Close" onClick={handleCloseDocument} disabled={!currentDocument} />
+        <div className="chrome-center" data-tauri-drag-region />
+        <div className="chrome-right">
+          <div className="chrome-controls" data-tauri-drag-region="false">
+            <button
+              className="chrome-btn"
+              aria-label="Minimize"
+              onClick={handleWindowMinimize}
+              disabled={!windowControlsReady}
+            >
+              <span className="chrome-icon minus" />
+            </button>
+            <button
+              className="chrome-btn"
+              aria-label={isWindowMaximized ? 'Restore window' : 'Maximize window'}
+              onClick={handleWindowToggleMaximize}
+              disabled={!windowControlsReady}
+            >
+              <span className={`chrome-icon ${isWindowMaximized ? 'restore' : 'square'}`} />
+            </button>
+            <button
+              className="chrome-btn danger"
+              aria-label="Close window"
+              onClick={handleWindowClose}
+              disabled={!windowControlsReady}
+            >
+              <span className="chrome-icon close" />
+            </button>
           </div>
         </div>
       </header>
 
-      <div className="workspace-columns">
-        <DocumentBrowser />
+      <div className="workspace-main">
+        <div className="workspace-rail">
+          <DocumentBrowser />
+        </div>
 
-        <main className="workspace-editor-panel">
+        <main className="editor-stack">
           {currentDocument ? (
             <>
-              <div className="editor-header">
+              <div className="editor-headline">
                 <div>
-                  <p className="editor-eyebrow">
+                  <p className="workspace-eyebrow">
                     {currentDocument.documentType === 'world' ? 'World bible' : 'Narrative'} · {docCategory}
                   </p>
                   <h1>{currentDocument.title}</h1>
@@ -248,7 +331,7 @@ export function ProjectWorkspace() {
                 </div>
                 <div className="editor-actions">
                   <button className="ghost" onClick={handleCloseDocument}>
-                    Close tab
+                    Close document
                   </button>
                   <button className="solid" onClick={() => handleSave()} disabled={!hasUnsavedChanges || isSaving}>
                     {isSaving ? 'Saving…' : hasUnsavedChanges ? 'Save' : 'Saved'}
@@ -256,27 +339,29 @@ export function ProjectWorkspace() {
                 </div>
               </div>
 
-              <div className="editor-telemetry">
+              <div className="editor-insights">
                 <span>{characterCount.toLocaleString()} characters</span>
-                <span className="dot" />
+                <span>{liveWordCount.toLocaleString()} words</span>
                 <span>Updated {new Date(currentDocument.modifiedAt * 1000).toLocaleDateString()}</span>
-                <span className="dot" />
-                <span className={hasUnsavedChanges ? 'warn' : 'ok'}>{hasUnsavedChanges ? 'Unsaved' : 'Synced'}</span>
+                <span className={hasUnsavedChanges ? 'warn' : 'ok'}>{syncCopy}</span>
               </div>
 
-              <div className="editor-surface">
+              <div className="editor-shell">
                 <PlateEditor content={editorContent} onChange={handleEditorChange} />
               </div>
             </>
           ) : (
             <div className="no-document">
-              <p>Select a document on the left or create a new one.</p>
+              <div>
+                <p className="workspace-eyebrow">Nothing open</p>
+                <p className="subtle">Pick a file in the navigator to start writing.</p>
+              </div>
             </div>
           )}
         </main>
 
-        <aside className="workspace-sidecar">
-          <section className="sidecar-panel">
+        <aside className="workspace-inspector">
+          <section className="inspector-panel">
             <div className="panel-head">
               <p className="workspace-eyebrow">Outline</p>
               <span>{outline.length} sections</span>
@@ -294,10 +379,12 @@ export function ProjectWorkspace() {
             )}
           </section>
 
-          <section className="sidecar-panel">
+          <section className="inspector-panel pinboard">
             <div className="panel-head">
               <p className="workspace-eyebrow">Pinned options</p>
-              <span>Quick toggles</span>
+              <button className="link-button" onClick={handleResetPinned}>
+                Reset
+              </button>
             </div>
             <div className="pin-grid">
               <button
@@ -324,53 +411,43 @@ export function ProjectWorkspace() {
             </div>
           </section>
 
-          <section className="sidecar-panel">
+          <section className="inspector-panel highlight-panel">
             <div className="panel-head">
-              <p className="workspace-eyebrow">Navigator</p>
-              <span>{navigatorDocuments.length} recent</span>
+              <p className="workspace-eyebrow">Highlight legend</p>
+              <span>Color cues</span>
             </div>
-            {navigatorDocuments.length === 0 ? (
-              <p className="panel-empty">Open files will land here for quick hopping.</p>
-            ) : (
-              <ul className="navigator-list">
-                {navigatorDocuments.map((doc) => (
-                  <li key={doc.path}>
-                    <button
-                      onClick={() => handleOpenFromNavigator(doc.path)}
-                      className={currentDocument?.path === doc.path ? 'active' : ''}
-                    >
-                      <div>
-                        <span className="title">{doc.title}</span>
-                        <span className="meta">{doc.wordCount.toLocaleString()} words</span>
-                      </div>
-                      <span className="date">{new Date(doc.modifiedAt * 1000).toLocaleDateString()}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <ul className="highlight-list">
+              {highlightLegend.map((tone) => (
+                <li key={tone.id}>
+                  <span className="highlight-dot" data-tone={tone.id} />
+                  <div>
+                    <p className="highlight-label">{tone.label}</p>
+                    <p className="highlight-copy">{tone.copy}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </section>
         </aside>
       </div>
 
       <footer className="workspace-dock">
-        <div className="dock-tabs">
-          {dockTabs.map((doc) => (
-            <button
-              key={doc.path}
-              className={`dock-tab ${currentDocument?.path === doc.path ? 'active' : ''}`}
-              onClick={() => handleOpenFromNavigator(doc.path)}
-            >
-              <span className="tab-title">{doc.title}</span>
-              <span className="tab-meta">{doc.metadata?.category ?? 'General'}</span>
-            </button>
-          ))}
-          {dockTabs.length === 0 && <span className="dock-empty">Open documents will appear here.</span>}
-        </div>
-        <div className="dock-status">
-          <span>{liveWordCount.toLocaleString()} words</span>
-          <span className="dot" />
-          <span>{autosaveCopy}</span>
+        <div className="dock-tabs" role="tablist">
+          {dockTabs.length === 0 ? (
+            <span className="dock-empty">Open documents will appear here for quick switching.</span>
+          ) : (
+            dockTabs.map((doc) => (
+              <button
+                key={doc.path}
+                role="tab"
+                className={`dock-tab ${currentDocument?.path === doc.path ? 'active' : ''}`}
+                onClick={() => handleOpenFromNavigator(doc.path)}
+              >
+                <span className="tab-title">{doc.title}</span>
+                <span className="tab-meta">{doc.metadata?.category ?? getDocumentCategory(doc.path)}</span>
+              </button>
+            ))
+          )}
         </div>
       </footer>
     </div>
