@@ -49,9 +49,14 @@ pub fn create_project(name: &str, custom_path: Option<PathBuf>) -> Result<Projec
         get_projects_root()?.join(name)
     };
 
+    // Debug logging
+    eprintln!("DEBUG: Creating project at: {:?}", project_path);
+    eprintln!("DEBUG: Project path exists: {}", project_path.exists());
+    eprintln!("DEBUG: Current working directory: {:?}", std::env::current_dir());
+
     // Check if project already exists
     if project_path.exists() {
-        anyhow::bail!("Project already exists at: {:?}", project_path);
+        anyhow::bail!("Project already exists at: {}", project_path.display());
     }
 
     // Initialize folder structure
@@ -72,6 +77,10 @@ pub fn create_project(name: &str, custom_path: Option<PathBuf>) -> Result<Projec
     let project_json = serde_json::to_string_pretty(&project)
         .context("Failed to serialize project metadata")?;
     write_file(&project_json_path, &project_json)?;
+
+    eprintln!("DEBUG: Project created successfully at: {:?}", project_path);
+    eprintln!("DEBUG: project.json path: {:?}", project_json_path);
+    eprintln!("DEBUG: project.json exists: {}", project_json_path.exists());
 
     Ok(project)
 }
@@ -95,7 +104,11 @@ pub fn open_project(project_path: &Path) -> Result<Project> {
 pub fn list_projects() -> Result<Vec<Project>> {
     let projects_root = get_projects_root()?;
 
+    eprintln!("DEBUG: Listing projects from: {:?}", projects_root);
+    eprintln!("DEBUG: Projects root exists: {}", projects_root.exists());
+
     if !projects_root.exists() {
+        eprintln!("DEBUG: Projects root does not exist, returning empty list");
         return Ok(Vec::new());
     }
 
@@ -105,13 +118,24 @@ pub fn list_projects() -> Result<Vec<Project>> {
         let entry = entry?;
         let path = entry.path();
 
+        eprintln!("DEBUG: Found entry: {:?}", path);
+
         if path.is_dir() {
+            eprintln!("DEBUG: Entry is a directory, attempting to open as project");
             match open_project(&path) {
-                Ok(project) => projects.push(project),
-                Err(_) => continue, // Skip invalid projects
+                Ok(project) => {
+                    eprintln!("DEBUG: Successfully opened project: {}", project.name);
+                    projects.push(project);
+                },
+                Err(e) => {
+                    eprintln!("DEBUG: Failed to open project: {:?}", e);
+                    continue; // Skip invalid projects
+                }
             }
         }
     }
+
+    eprintln!("DEBUG: Found {} total projects", projects.len());
 
     // Sort by most recently modified
     projects.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
