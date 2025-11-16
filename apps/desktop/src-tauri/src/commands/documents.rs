@@ -1,4 +1,4 @@
-use crate::models::Document;
+use crate::models::{Document, DocumentType};
 use crate::services::document_service;
 use std::path::PathBuf;
 
@@ -7,13 +7,21 @@ use std::path::PathBuf;
 pub async fn create_document(
     project_path: String,
     title: String,
+    document_type: String, // "world" or "narrative"
     category: String,
     subcategory: Option<String>,
 ) -> Result<Document, String> {
     let path = PathBuf::from(project_path);
     let subcat = subcategory.as_deref();
 
-    document_service::create_document(&path, &title, &category, subcat)
+    // Parse document type
+    let doc_type = match document_type.as_str() {
+        "world" => DocumentType::World,
+        "narrative" => DocumentType::Narrative,
+        _ => return Err(format!("Invalid document type: {}", document_type)),
+    };
+
+    document_service::create_document(&path, &title, doc_type, &category, subcat)
         .map_err(|e| format!("Failed to create document: {}", e))
 }
 

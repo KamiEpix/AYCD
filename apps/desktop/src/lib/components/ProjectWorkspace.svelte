@@ -59,7 +59,12 @@
     <div class="editor-panel">
       {#if documentStore.current}
         <div class="editor-header">
-          <h3>{documentStore.current.title}</h3>
+          <div class="title-section">
+            <h3>{documentStore.current.title}</h3>
+            <span class="doc-type-badge">
+              {documentStore.current.documentType === 'world' ? '🗺️ World' : '📖 Narrative'}
+            </span>
+          </div>
           <div class="editor-actions">
             <span class="word-count">{documentStore.current.wordCount} words</span>
             <button class="btn-save" onclick={handleSave} disabled={isSaving}>
@@ -148,9 +153,25 @@
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   }
 
+  .title-section {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
   .editor-header h3 {
     font-size: 1.25rem;
     font-weight: 600;
+  }
+
+  .doc-type-badge {
+    padding: 0.25rem 0.5rem;
+    background: rgba(102, 126, 234, 0.2);
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.8);
   }
 
   .editor-actions {

@@ -42,7 +42,10 @@ async function createProject(name: string, customPath?: string) {
   error = null;
 
   try {
-    const project = await projectApi.createProject({ name, path: customPath });
+    const project = await projectApi.createProject({
+      name,
+      path: customPath || ''
+    });
     projects = [project, ...projects];
     currentProject = project;
     return project;

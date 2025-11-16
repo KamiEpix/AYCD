@@ -1,16 +1,22 @@
 <script lang="ts">
   import { documentStore } from '$stores/document.svelte';
   import { projectStore } from '$stores/project.svelte';
+  import ModeSwitcher from './ModeSwitcher.svelte';
 
   let showCreateForm = $state(false);
   let newDocTitle = $state('');
-  let selectedCategory = $state('NARRATIVE');
   let selectedSubcategory = $state('Drafts');
 
   const categories = {
-    WORLD: ['Cast', 'Places', 'Objects', 'Systems', 'Lore'],
-    NARRATIVE: ['Drafts', 'Final', 'Research', 'Planning'],
+    world: ['Cast', 'Places', 'Objects', 'Systems', 'Lore'],
+    narrative: ['Drafts', 'Final', 'Research', 'Planning'],
   };
+
+  // Update default subcategory when mode changes
+  $effect(() => {
+    const mode = documentStore.mode;
+    selectedSubcategory = categories[mode][0];
+  });
 
   async function handleCreateDocument() {
     if (!newDocTitle.trim() || !projectStore.current) return;
@@ -19,7 +25,8 @@
       await documentStore.createDocument(
         projectStore.current.path,
         newDocTitle.trim(),
-        selectedCategory,
+        documentStore.mode,
+        selectedSubcategory,
         selectedSubcategory
       );
       newDocTitle = '';
@@ -57,15 +64,18 @@
 
 <div class="document-browser">
   <header>
-    <h2>Documents</h2>
-    {#if !showCreateForm}
-      <button class="btn-create" onclick={() => (showCreateForm = true)}>+ New Document</button>
-    {/if}
+    <div class="header-top">
+      <h2>Documents</h2>
+      {#if !showCreateForm}
+        <button class="btn-create" onclick={() => (showCreateForm = true)}>+ New Document</button>
+      {/if}
+    </div>
+    <ModeSwitcher />
   </header>
 
   {#if showCreateForm}
     <div class="create-form">
-      <h3>Create New Document</h3>
+      <h3>Create New {documentStore.mode === 'world' ? 'World' : 'Narrative'} Document</h3>
       <form
         onsubmit={(e) => {
           e.preventDefault();
@@ -74,19 +84,8 @@
       >
         <input type="text" bind:value={newDocTitle} placeholder="Document title..." autofocus />
 
-        <div class="category-selector">
-          <label>
-            <input type="radio" bind:group={selectedCategory} value="NARRATIVE" />
-            <span>Narrative</span>
-          </label>
-          <label>
-            <input type="radio" bind:group={selectedCategory} value="WORLD" />
-            <span>World</span>
-          </label>
-        </div>
-
         <select bind:value={selectedSubcategory}>
-          {#each categories[selectedCategory as keyof typeof categories] as subcat}
+          {#each categories[documentStore.mode] as subcat}
             <option value={subcat}>{subcat}</option>
           {/each}
         </select>
@@ -113,13 +112,16 @@
   <div class="documents-list">
     {#if documentStore.isLoading}
       <div class="loading">Loading documents...</div>
-    {:else if documentStore.documents.length === 0}
+    {:else if documentStore.filteredDocuments.length === 0}
       <div class="empty-state">
-        <p>No documents yet. Create your first document to get started!</p>
+        <p>
+          No {documentStore.mode === 'world' ? 'world' : 'narrative'} documents yet. Create your
+          first document to get started!
+        </p>
       </div>
     {:else}
       <div class="document-grid">
-        {#each documentStore.documents as doc (doc.path)}
+        {#each documentStore.filteredDocuments as doc (doc.path)}
           <button
             class="document-card"
             class:active={documentStore.current?.path === doc.path}
@@ -150,10 +152,16 @@
 
   header {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    gap: 0.75rem;
     padding: 1rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   }
 
   header h2 {
@@ -203,24 +211,6 @@
   .create-form input[type='text']:focus {
     outline: none;
     border-color: #667eea;
-  }
-
-  .category-selector {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 0.75rem;
-  }
-
-  .category-selector label {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    cursor: pointer;
-    color: rgba(255, 255, 255, 0.7);
-  }
-
-  .category-selector input[type='radio'] {
-    cursor: pointer;
   }
 
   select {

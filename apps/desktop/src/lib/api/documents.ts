@@ -13,6 +13,7 @@ export async function createDocument(input: CreateDocumentInput): Promise<Docume
   return await invoke<Document>('create_document', {
     projectPath: input.projectId, // projectId is actually the path in our case
     title: input.title,
+    documentType: input.documentType, // "world" or "narrative"
     category: input.category,
     subcategory: input.subcategory,
   });

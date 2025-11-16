@@ -3,7 +3,7 @@
  * Tracks current document and available documents in the project
  */
 
-import type { Document } from '@aycd/core';
+import type { Document, DocumentType } from '@aycd/core';
 import * as documentApi from '$api/documents';
 
 // Current active document
@@ -11,6 +11,9 @@ let currentDocument = $state<Document | null>(null);
 
 // List of all documents in the project
 let documents = $state<Document[]>([]);
+
+// Current mode (WORLD or NARRATIVE)
+let currentMode = $state<DocumentType>('world');
 
 // Loading states
 let isLoading = $state(false);
@@ -40,6 +43,7 @@ async function loadDocuments(projectPath: string) {
 async function createDocument(
   projectPath: string,
   title: string,
+  documentType: DocumentType,
   category: string,
   subcategory?: string
 ) {
@@ -50,6 +54,7 @@ async function createDocument(
     const document = await documentApi.createDocument({
       projectId: projectPath,
       title,
+      documentType,
       category,
       subcategory,
     });
@@ -148,6 +153,15 @@ function closeDocument() {
 }
 
 /**
+ * Sets the current mode (WORLD or NARRATIVE)
+ */
+function setMode(mode: DocumentType) {
+  currentMode = mode;
+  // Close current document when switching modes
+  currentDocument = null;
+}
+
+/**
  * Clears all documents (when closing a project)
  */
 function clearDocuments() {
@@ -165,6 +179,12 @@ export const documentStore = {
   get documents() {
     return documents;
   },
+  get filteredDocuments() {
+    return documents.filter((d) => d.documentType === currentMode);
+  },
+  get mode() {
+    return currentMode;
+  },
   get isLoading() {
     return isLoading;
   },
@@ -179,5 +199,6 @@ export const documentStore = {
   saveCurrentDocument,
   deleteDocument,
   closeDocument,
+  setMode,
   clearDocuments,
 };

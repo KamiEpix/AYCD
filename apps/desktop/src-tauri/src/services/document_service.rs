@@ -4,18 +4,26 @@ use serde_json;
 use std::fs;
 use std::path::Path;
 
-use crate::models::Document;
+use crate::models::{Document, DocumentType};
 use super::file_service::{ensure_dir, write_file, read_file};
 
 /// Creates a new document in the specified category
 pub fn create_document(
     project_path: &Path,
     title: &str,
+    document_type: DocumentType,
     category: &str,
     subcategory: Option<&str>,
 ) -> Result<Document> {
+    // Determine root directory based on document type
+    let root_dir = match document_type {
+        DocumentType::World => "WORLD",
+        DocumentType::Narrative => "NARRATIVE",
+    };
+
     // Build the document path
     let mut doc_path = project_path.to_path_buf();
+    doc_path.push(root_dir);
     doc_path.push(category);
 
     if let Some(subcat) = subcategory {
@@ -36,12 +44,18 @@ pub fn create_document(
 
     // Create document metadata
     let now = Utc::now().timestamp();
+    let doc_type_str = match document_type {
+        DocumentType::World => "world",
+        DocumentType::Narrative => "narrative",
+    };
+
     let document = Document {
         id: uuid::Uuid::new_v4().to_string(),
         project_id: String::new(), // Will be set by caller
         path: doc_path.to_string_lossy().to_string(),
         title: title.to_string(),
         content: String::new(),
+        document_type,
         word_count: 0,
         created_at: now,
         modified_at: now,
@@ -50,8 +64,8 @@ pub fn create_document(
 
     // Write empty markdown file with frontmatter
     let content = format!(
-        "---\nid: {}\ntitle: {}\ncreated: {}\n---\n\n# {}\n\n",
-        document.id, title, now, title
+        "---\nid: {}\ntitle: {}\ntype: {}\ncreated: {}\n---\n\n# {}\n\n",
+        document.id, title, doc_type_str, now, title
     );
     write_file(&doc_path, &content)?;
 
@@ -116,12 +130,35 @@ pub fn read_document(document_path: &Path) -> Result<Document> {
 
     let word_count = count_words(&body);
 
+    // Determine document type from frontmatter or path
+    let document_type = frontmatter
+        .get("type")
+        .and_then(|v| v.as_str())
+        .and_then(|s| match s {
+            "world" => Some(DocumentType::World),
+            "narrative" => Some(DocumentType::Narrative),
+            _ => None,
+        })
+        .or_else(|| {
+            // Infer from path if not in frontmatter
+            let path_str = document_path.to_string_lossy();
+            if path_str.contains("WORLD") || path_str.contains("/WORLD/") || path_str.contains("\\WORLD\\") {
+                Some(DocumentType::World)
+            } else if path_str.contains("NARRATIVE") || path_str.contains("/NARRATIVE/") || path_str.contains("\\NARRATIVE\\") {
+                Some(DocumentType::Narrative)
+            } else {
+                None
+            }
+        })
+        .unwrap_or(DocumentType::World); // Default to World if undetermined
+
     Ok(Document {
         id,
         project_id: String::new(),
         path: document_path.to_string_lossy().to_string(),
         title,
         content,
+        document_type,
         word_count,
         created_at,
         modified_at,

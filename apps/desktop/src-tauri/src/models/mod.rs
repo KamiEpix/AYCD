@@ -13,12 +13,20 @@ pub struct Project {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DocumentType {
+    World,
+    Narrative,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Document {
     pub id: String,
     pub project_id: String,
     pub path: String,
     pub title: String,
     pub content: String,
+    pub document_type: DocumentType, // WORLD vs NARRATIVE mode
     pub word_count: usize,
     pub created_at: i64,
     pub modified_at: i64,
