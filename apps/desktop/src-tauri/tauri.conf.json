@@ -28,6 +28,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "AYCD",
         "width": 1400,
         "height": 900,
