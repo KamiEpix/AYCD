@@ -29,6 +29,7 @@
   "devDependencies": {
     "@aycd/core": "workspace:*",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@tailwindcss/postcss": "^4.1.17",
     "@tauri-apps/cli": "^2.2.0",
     "@types/node": "^22.10.2",
     "autoprefixer": "^10.4.20",
