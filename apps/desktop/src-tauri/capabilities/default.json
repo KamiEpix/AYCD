@@ -24,8 +24,14 @@
     "fs:allow-remove",
     "fs:allow-exists",
     "fs:allow-stat",
+    "fs:allow-rename",
     "fs:scope-home",
     "shell:default",
     "shell:allow-open"
-  ]
+  ],
+  "scope": {
+    "allow": [
+      "$HOME/AYCD/**"
+    ]
+  }
 }
