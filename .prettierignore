@@ -1,0 +1,10 @@
+node_modules/
+dist/
+dist-ssr/
+build/
+target/
+coverage/
+.pnpm-store/
+pnpm-lock.yaml
+*.min.js
+*.bundle.js
