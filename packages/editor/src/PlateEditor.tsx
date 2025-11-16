@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useEffect, useState } from 'react';
+import React, { useCallback, useMemo, useEffect, useState, useRef } from 'react';
 import { createEditor, Descendant, Transforms, Editor as SlateEditor, Element as SlateElement } from 'slate';
 import { Slate, Editable, withReact, useSlate } from 'slate-react';
 import { withHistory } from 'slate-history';
@@ -189,8 +189,8 @@ export function PlateEditor({ content = '', onChange, readOnly = false }: PlateE
 
   const initialValue = useMemo(() => parseContent(content), [content, parseContent]);
 
-  // Local state for editor value
-  const [value, setValue] = useState<Descendant[]>(initialValue);
+  // Track the last loaded content to detect document changes
+  const lastLoadedContentRef = useRef(content);
 
   // Serialize Slate value back to text
   const serializeToText = useCallback((nodes: Descendant[]) => {
@@ -225,7 +225,6 @@ export function PlateEditor({ content = '', onChange, readOnly = false }: PlateE
   // Handle changes
   const handleChange = useCallback(
     (newValue: Descendant[]) => {
-      setValue(newValue);
       if (!onChange || readOnly) return;
       const text = serializeToText(newValue);
       onChange(text);
@@ -233,15 +232,22 @@ export function PlateEditor({ content = '', onChange, readOnly = false }: PlateE
     [onChange, readOnly, serializeToText]
   );
 
-  // Reset editor value when content prop changes (different document loaded)
+  // Reset editor value ONLY when a different document is loaded (not on every keystroke)
   useEffect(() => {
-    const newValue = initialValue;
-    setValue(newValue);
+    // Only reset if the content actually changed externally (not from typing)
+    if (content !== lastLoadedContentRef.current) {
+      const newValue = initialValue;
 
-    // Reset editor selection and history
-    editor.children = newValue;
-    editor.selection = null;
-    editor.history = { redos: [], undos: [] };
+      // Properly reset the editor
+      editor.children = newValue;
+      editor.selection = null;
+      editor.history = { redos: [], undos: [] };
+
+      // Force a re-render
+      editor.onChange();
+
+      lastLoadedContentRef.current = content;
+    }
   }, [content, initialValue, editor]);
 
   const renderElement = useCallback((props: any) => <Element {...props} />, []);
@@ -249,7 +255,7 @@ export function PlateEditor({ content = '', onChange, readOnly = false }: PlateE
 
   return (
     <div className="plate-editor-container">
-      <Slate editor={editor} initialValue={value} onChange={handleChange}>
+      <Slate editor={editor} initialValue={initialValue} onChange={handleChange}>
         <Toolbar />
         <Editable
           className="plate-editor-content"
