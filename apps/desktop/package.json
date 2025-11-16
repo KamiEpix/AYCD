@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
+    "dev": "tauri dev",
     "dev:web": "vite dev --host",
-    "build": "vite build",
-    "build:dev": "vite build --mode development",
+    "build": "tauri build",
+    "build:dev": "tauri build --debug",
     "build:win": "tauri build --target x86_64-pc-windows-msvc",
     "build:mac": "tauri build --target aarch64-apple-darwin",
     "build:linux": "tauri build --target x86_64-unknown-linux-gnu",
