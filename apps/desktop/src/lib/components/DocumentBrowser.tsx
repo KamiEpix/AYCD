@@ -1,43 +1,89 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useDocument } from '@/lib/contexts/DocumentContext';
 import { useProject } from '@/lib/contexts/ProjectContext';
 import { ModeSwitcher } from './ModeSwitcher';
 import './DocumentBrowser.css';
 
-const categories = {
+const sectionMap: Record<'world' | 'narrative', string[]> = {
   world: ['Cast', 'Places', 'Objects', 'Systems', 'Lore'],
   narrative: ['Drafts', 'Final', 'Research', 'Planning'],
 };
 
+const queueCopy = {
+  world: 'Queue new cast entries, realms, and systems that need fleshing out next.',
+  narrative: 'Stage drafts, rewrites, and beats so your story keeps moving.',
+};
+
+const sectionColorMap: Partial<Record<string, string>> = {
+  Cast: 'var(--aycd-amber)',
+  Places: 'var(--aycd-sand)',
+  Objects: 'var(--aycd-rose)',
+  Systems: 'var(--aycd-teal)',
+  Lore: 'var(--aycd-plum)',
+  Drafts: 'var(--aycd-amber)',
+  Final: 'var(--aycd-teal)',
+  Research: 'var(--aycd-plum)',
+  Planning: 'var(--aycd-sand)',
+};
+
 export function DocumentBrowser() {
   const { filteredDocuments, current, isLoading, mode, createDocument, openDocument, loadDocuments } = useDocument();
-  const { current: currentProject } = useProject();
+  const { current: currentProject, closeProject } = useProject();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newDocTitle, setNewDocTitle] = useState('');
-  const [selectedSubcategory, setSelectedSubcategory] = useState(categories[mode][0]);
+  const [selectedCategory, setSelectedCategory] = useState(sectionMap[mode][0]);
+  const [filter, setFilter] = useState('');
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    setSelectedSubcategory(categories[mode][0]);
+    setSelectedCategory(sectionMap[mode][0]);
+    setExpandedSections({});
   }, [mode]);
 
-  const handleCreateDocument = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const queuePreview = useMemo(
+    () => [...filteredDocuments].sort((a, b) => b.modifiedAt - a.modifiedAt).slice(0, 3),
+    [filteredDocuments]
+  );
+
+  const filteredList = useMemo(() => {
+    if (!filter.trim()) return filteredDocuments;
+    const query = filter.toLowerCase();
+    return filteredDocuments.filter((doc) => doc.title.toLowerCase().includes(query));
+  }, [filter, filteredDocuments]);
+
+  const groupedByCategory = useMemo(() => {
+    const groups: Record<string, typeof filteredDocuments> = {};
+    filteredList.forEach((doc) => {
+      const category = doc.metadata?.category ?? 'Unsorted';
+      if (!groups[category]) {
+        groups[category] = [];
+      }
+      groups[category]?.push(doc);
+    });
+
+    return Object.entries(groups)
+      .map(([category, docs]) => [category, [...docs].sort((a, b) => a.title.localeCompare(b.title))] as const)
+      .sort((a, b) => a[0].localeCompare(b[0]));
+  }, [filteredList]);
+
+  const handleCreateDocument = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (!newDocTitle.trim() || !currentProject) return;
 
     try {
-      await createDocument(currentProject.path, newDocTitle.trim(), mode, selectedSubcategory);
+      await createDocument(currentProject.path, newDocTitle.trim(), mode, selectedCategory);
       setNewDocTitle('');
       setShowCreateForm(false);
-    } catch (e) {
-      console.error('Failed to create document:', e);
+    } catch (error) {
+      console.error('Failed to create document:', error);
     }
   };
 
   const handleOpenDocument = async (docPath: string) => {
     try {
       await openDocument(docPath);
-    } catch (e) {
-      console.error('Failed to open document:', e);
+    } catch (error) {
+      console.error('Failed to open document:', error);
     }
   };
 
@@ -47,109 +93,138 @@ export function DocumentBrowser() {
     }
   };
 
-  const getCategoryIcon = (path: string): string => {
-    if (path.includes('WORLD/Cast')) return '👤';
-    if (path.includes('WORLD/Places')) return '🗺️';
-    if (path.includes('WORLD/Objects')) return '⚔️';
-    if (path.includes('WORLD/Systems')) return '⚙️';
-    if (path.includes('WORLD/Lore')) return '📜';
-    if (path.includes('NARRATIVE/Drafts')) return '📝';
-    if (path.includes('NARRATIVE/Final')) return '✅';
-    if (path.includes('NARRATIVE/Research')) return '🔍';
-    if (path.includes('NARRATIVE/Planning')) return '📋';
-    return '📄';
+  const toggleSection = (category: string) => {
+    setExpandedSections((prev) => ({ ...prev, [category]: !prev[category] }));
   };
 
-  const formatDate = (timestamp: number): string => {
-    return new Date(timestamp * 1000).toLocaleDateString();
+  const handleLeaveProject = () => {
+    closeProject();
   };
 
   return (
-    <div className="document-browser">
-      <header>
-        <div className="header-top">
-          <h2>Documents</h2>
-          <div className="header-actions">
-            {!showCreateForm && (
-              <>
-                <button className="btn-refresh" onClick={handleRefresh} title="Refresh documents">
-                  🔄
-                </button>
-                <button className="btn-create" onClick={() => setShowCreateForm(true)}>
-                  + New Document
-                </button>
-              </>
-            )}
-          </div>
+    <aside className="document-browser">
+      <header className="browser-heading">
+        <div>
+          <p className="browser-eyebrow">Active {mode === 'world' ? 'world bible' : 'narrative workspace'}</p>
+          <h2>{currentProject?.name ?? 'Untitled project'}</h2>
+          <p className="browser-subtle">{currentProject?.path ?? 'No project path selected'}</p>
         </div>
-        <ModeSwitcher />
+        <div className="browser-heading-actions">
+          <button className="ghost" onClick={handleRefresh}>
+            Sync
+          </button>
+          <button className="ghost danger" onClick={handleLeaveProject}>
+            Leave
+          </button>
+        </div>
       </header>
 
+      <div className="browser-controls">
+        <ModeSwitcher />
+        <div className="browser-search">
+          <input
+            type="text"
+            placeholder={mode === 'world' ? 'Search people, places, systems…' : 'Search drafts, beats…'}
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+          />
+          <button onClick={() => setShowCreateForm((prev) => !prev)}>{showCreateForm ? 'Close' : 'New'}</button>
+        </div>
+      </div>
+
       {showCreateForm && (
-        <div className="create-form">
-          <h3>Create New {mode === 'world' ? 'World' : 'Narrative'} Document</h3>
-          <form onSubmit={handleCreateDocument}>
-            <input
-              type="text"
-              value={newDocTitle}
-              onChange={(e) => setNewDocTitle(e.target.value)}
-              placeholder="Document title..."
-              autoFocus
-            />
-            <select value={selectedSubcategory} onChange={(e) => setSelectedSubcategory(e.target.value)}>
-              {categories[mode].map((subcat) => (
-                <option key={subcat} value={subcat}>
-                  {subcat}
+        <form className="browser-create" onSubmit={handleCreateDocument}>
+          <label className="field">
+            <span>Title</span>
+            <input type="text" value={newDocTitle} onChange={(event) => setNewDocTitle(event.target.value)} autoFocus />
+          </label>
+          <label className="field">
+            <span>Category</span>
+            <select value={selectedCategory} onChange={(event) => setSelectedCategory(event.target.value)}>
+              {sectionMap[mode].map((category) => (
+                <option key={category} value={category}>
+                  {category}
                 </option>
               ))}
             </select>
-            <div className="form-actions">
-              <button type="submit" className="btn-primary" disabled={!newDocTitle.trim()}>
-                Create
-              </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => {
-                  setShowCreateForm(false);
-                  setNewDocTitle('');
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
+          </label>
+          <div className="create-actions">
+            <button type="submit" className="solid" disabled={!newDocTitle.trim()}>
+              Create
+            </button>
+            <button type="button" onClick={() => setShowCreateForm(false)}>
+              Cancel
+            </button>
+          </div>
+        </form>
       )}
 
-      <div className="documents-list">
+      <div className="browser-tree">
         {isLoading ? (
-          <div className="loading">Loading documents...</div>
-        ) : filteredDocuments.length === 0 ? (
-          <div className="empty-state">
-            <p>No {mode === 'world' ? 'world' : 'narrative'} documents yet.</p>
-            <p>Create your first document to get started!</p>
-          </div>
+          <div className="tree-empty">Loading documents…</div>
+        ) : groupedByCategory.length === 0 ? (
+          <div className="tree-empty">Nothing filed yet. Start by creating a document.</div>
         ) : (
-          <div className="document-grid">
-            {filteredDocuments.map((doc) => (
-              <button
-                key={doc.path}
-                className={`document-card ${current?.path === doc.path ? 'active' : ''}`}
-                onClick={() => handleOpenDocument(doc.path)}
-              >
-                <div className="doc-icon">{getCategoryIcon(doc.path)}</div>
-                <div className="doc-info">
-                  <h4>{doc.title}</h4>
-                  <p className="doc-meta">
-                    {doc.wordCount} words · {formatDate(doc.modifiedAt)}
-                  </p>
+          groupedByCategory.map(([category, docs]) => {
+            const isExpanded = expandedSections[category] ?? true;
+            return (
+              <div key={category} className="tree-section">
+                <button className="tree-toggle" onClick={() => toggleSection(category)}>
+                  <span
+                    className={`tree-indicator ${isExpanded ? 'open' : ''}`}
+                    style={{ backgroundColor: sectionColorMap[category] ?? 'rgba(255, 255, 255, 0.2)' }}
+                  />
+                  <span className="tree-label">{category}</span>
+                  <span className="tree-count">{docs.length}</span>
+                </button>
+                {isExpanded && (
+                  <ul>
+                    {docs.map((doc) => (
+                      <li key={doc.path}>
+                        <button
+                          className={`tree-leaf ${current?.path === doc.path ? 'active' : ''}`}
+                          onClick={() => handleOpenDocument(doc.path)}
+                        >
+                          <div className="leaf-body">
+                            <span className="leaf-title">{doc.title}</span>
+                            <span className="leaf-meta">{doc.wordCount.toLocaleString()} words</span>
+                          </div>
+                          <span className="leaf-date">{new Date(doc.modifiedAt * 1000).toLocaleDateString()}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <footer className="browser-queue">
+        <div className="queue-header">
+          <div>
+            <p className="browser-eyebrow">Queue</p>
+            <p className="queue-copy">{queueCopy[mode]}</p>
+          </div>
+          <span>{queuePreview.length} staged</span>
+        </div>
+        {queuePreview.length === 0 ? (
+          <div className="queue-empty">Pin a document to get rolling.</div>
+        ) : (
+          <div className="queue-items">
+            {queuePreview.map((doc) => (
+              <button key={doc.path} className="queue-item" onClick={() => handleOpenDocument(doc.path)}>
+                <div>
+                  <p className="queue-title">{doc.title}</p>
+                  <p className="queue-meta">Updated {new Date(doc.modifiedAt * 1000).toLocaleDateString()}</p>
                 </div>
+                <span className="queue-words">{doc.wordCount.toLocaleString()} wds</span>
               </button>
             ))}
           </div>
         )}
-      </div>
-    </div>
+      </footer>
+    </aside>
   );
 }

@@ -1,8 +1,6 @@
 /**
- * @aycd/editor - Plate.js-based rich text editor
- * React island wrapped for use in Svelte
- *
- * TODO: Implement Plate.js integration
+ * @aycd/editor
+ * A modern Plate.js playground that mirrors the Plate demo experience.
  */
 
 export { PlateEditor } from './PlateEditor';
