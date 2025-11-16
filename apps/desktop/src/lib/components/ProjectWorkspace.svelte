@@ -35,7 +35,7 @@
       editorContent = documentStore.current.content;
       lastSavedContent = documentStore.current.content;
       hasUnsavedChanges = false;
-      liveWordCount = countWords(editorContent);
+      // Note: liveWordCount is updated by the tracking effect below
     }
   });
 
