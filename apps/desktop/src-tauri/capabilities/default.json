@@ -25,13 +25,14 @@
     "fs:allow-exists",
     "fs:allow-stat",
     "fs:allow-rename",
-    "fs:scope-home",
+    "fs:allow-read-file",
+    "fs:allow-copy-file",
     "shell:default",
     "shell:allow-open"
   ],
   "scope": {
     "allow": [
-      "$HOME/AYCD/**"
+      { "path": "$HOME/**" }
     ]
   }
 }
