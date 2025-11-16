@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use chrono::Utc;
 use serde_json;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::models::Document;
 use super::file_service::{ensure_dir, write_file, read_file};

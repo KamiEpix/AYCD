@@ -22,6 +22,8 @@ pub struct Document {
     pub word_count: usize,
     pub created_at: i64,
     pub modified_at: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
 }
 
 // Future models will be added here:
