@@ -5,7 +5,10 @@ use std::path::PathBuf;
 /// Creates a new AYCD project
 #[tauri::command]
 pub async fn create_project(name: String, custom_path: Option<String>) -> Result<Project, String> {
-    let path = custom_path.map(PathBuf::from);
+    // Convert empty strings to None
+    let path = custom_path
+        .filter(|p| !p.trim().is_empty())
+        .map(PathBuf::from);
 
     project_service::create_project(&name, path)
         .map_err(|e| format!("Failed to create project: {}", e))
