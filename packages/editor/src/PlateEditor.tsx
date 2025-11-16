@@ -161,54 +161,32 @@ function SlashMenu({
   );
 }
 
-// Block Element Component with drag handle
+// Block Element Component
 const Element = ({ attributes, children, element }: any) => {
-  const [showHandle, setShowHandle] = useState(false);
-
-  const blockElement = () => {
-    switch (element.type) {
-      case 'h1':
-        return <h1 {...attributes}>{children}</h1>;
-      case 'h2':
-        return <h2 {...attributes}>{children}</h2>;
-      case 'h3':
-        return <h3 {...attributes}>{children}</h3>;
-      case 'blockquote':
-        return <blockquote {...attributes}>{children}</blockquote>;
-      case 'ul':
-        return <ul {...attributes}>{children}</ul>;
-      case 'ol':
-        return <ol {...attributes}>{children}</ol>;
-      case 'li':
-        return <li {...attributes}>{children}</li>;
-      case 'code':
-        return (
-          <pre {...attributes}>
-            <code>{children}</code>
-          </pre>
-        );
-      default:
-        return <p {...attributes}>{children}</p>;
-    }
-  };
-
-  return (
-    <div
-      className="editor-block"
-      onMouseEnter={() => setShowHandle(true)}
-      onMouseLeave={() => setShowHandle(false)}
-      contentEditable={false}
-    >
-      {showHandle && element.type !== 'li' && (
-        <div className="drag-handle" contentEditable={false}>
-          <span>⋮⋮</span>
-        </div>
-      )}
-      <div contentEditable suppressContentEditableWarning>
-        {blockElement()}
-      </div>
-    </div>
-  );
+  switch (element.type) {
+    case 'h1':
+      return <h1 {...attributes}>{children}</h1>;
+    case 'h2':
+      return <h2 {...attributes}>{children}</h2>;
+    case 'h3':
+      return <h3 {...attributes}>{children}</h3>;
+    case 'blockquote':
+      return <blockquote {...attributes}>{children}</blockquote>;
+    case 'ul':
+      return <ul {...attributes}>{children}</ul>;
+    case 'ol':
+      return <ol {...attributes}>{children}</ol>;
+    case 'li':
+      return <li {...attributes}>{children}</li>;
+    case 'code':
+      return (
+        <pre {...attributes}>
+          <code>{children}</code>
+        </pre>
+      );
+    default:
+      return <p {...attributes}>{children}</p>;
+  }
 };
 
 // Leaf Component for text formatting
@@ -442,37 +420,6 @@ export function PlateEditor({ content = '', onChange, readOnly = false }: PlateE
           left: 10rem !important;
           user-select: none;
           pointer-events: none;
-        }
-
-        /* Block wrapper with drag handle */
-        .editor-block {
-          position: relative;
-          margin: 1px 0;
-        }
-
-        .drag-handle {
-          position: absolute;
-          left: -2rem;
-          top: 0.25rem;
-          width: 1.5rem;
-          height: 1.5rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: grab;
-          opacity: 0.3;
-          transition: opacity 0.2s;
-          font-size: 1rem;
-          color: rgba(55, 53, 47, 0.4);
-          user-select: none;
-        }
-
-        .drag-handle:hover {
-          opacity: 0.8;
-        }
-
-        .drag-handle:active {
-          cursor: grabbing;
         }
 
         /* Floating Toolbar */
