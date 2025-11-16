@@ -14,15 +14,7 @@
     "clean": "rm -rf dist node_modules"
   },
   "dependencies": {
-    "@aycd/core": "workspace:*",
-    "@platejs/basic-nodes": "^51.0.0",
-    "@platejs/core": "^51.0.0",
-    "@platejs/dnd": "^51.0.0",
-    "@platejs/link": "^51.0.0",
-    "@platejs/list": "^51.0.0",
-    "@platejs/media": "^51.0.0",
-    "@platejs/table": "^51.0.0",
-    "platejs": "^51.0.0"
+    "@aycd/core": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^18.3.18",
@@ -32,7 +24,8 @@
   "peerDependencies": {
     "react": ">=18.0.0",
     "react-dom": ">=18.0.0",
-    "slate": ">=0.100.0",
-    "slate-react": ">=0.100.0"
+    "slate": "^0.100.0",
+    "slate-react": "^0.100.0",
+    "slate-history": "^0.100.0"
   }
 }

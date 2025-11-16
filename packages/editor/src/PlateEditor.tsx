@@ -1,22 +1,7 @@
-import React, { useCallback, useMemo, useEffect } from 'react';
-import { Plate, PlateContent, usePlateEditor } from 'platejs/react';
-import {
-  BasicMarksPlugin,
-  BasicBlocksPlugin,
-  BoldPlugin,
-  ItalicPlugin,
-  UnderlinePlugin,
-  StrikethroughPlugin,
-  CodePlugin,
-  HeadingPlugin,
-  BlockquotePlugin,
-} from '@platejs/basic-nodes/react';
-import { ListPlugin } from '@platejs/list/react';
-import { TablePlugin } from '@platejs/table/react';
-import { LinkPlugin } from '@platejs/link/react';
-import { ImagePlugin, MediaEmbedPlugin } from '@platejs/media/react';
-import { Transforms, Editor as SlateEditor, Element as SlateElement } from 'slate';
-import { useSlateStatic } from 'slate-react';
+import React, { useCallback, useMemo, useEffect, useState } from 'react';
+import { createEditor, Descendant, Transforms, Editor as SlateEditor, Element as SlateElement } from 'slate';
+import { Slate, Editable, withReact, useSlate } from 'slate-react';
+import { withHistory } from 'slate-history';
 
 import type { Document } from '@aycd/core';
 
@@ -26,36 +11,9 @@ export interface PlateEditorProps {
   readOnly?: boolean;
 }
 
-// Editor plugins configuration
-const plugins = [
-  // Marks
-  BasicMarksPlugin,
-  BoldPlugin,
-  ItalicPlugin,
-  UnderlinePlugin,
-  StrikethroughPlugin,
-  CodePlugin,
-
-  // Blocks
-  BasicBlocksPlugin,
-  HeadingPlugin,
-  BlockquotePlugin,
-
-  // Lists
-  ListPlugin,
-
-  // Tables
-  TablePlugin,
-
-  // Media
-  LinkPlugin,
-  ImagePlugin,
-  MediaEmbedPlugin,
-];
-
 // Toolbar Buttons
 function MarkButton({ format, icon }: { format: string; icon: React.ReactNode }) {
-  const editor = useSlateStatic();
+  const editor = useSlate();
 
   const isActive = () => {
     const marks = SlateEditor.marks(editor);
@@ -85,7 +43,7 @@ function MarkButton({ format, icon }: { format: string; icon: React.ReactNode })
 }
 
 function BlockButton({ format, icon }: { format: string; icon: React.ReactNode }) {
-  const editor = useSlateStatic();
+  const editor = useSlate();
 
   const isActive = () => {
     const { selection } = editor;
@@ -106,9 +64,9 @@ function BlockButton({ format, icon }: { format: string; icon: React.ReactNode }
     const isCurrentlyActive = isActive();
 
     Transforms.setNodes(
-      editor as any,
+      editor,
       { type: isCurrentlyActive ? 'p' : format } as any,
-      { match: (n) => SlateElement.isElement(n) && (editor as any).isBlock(n) }
+      { match: (n) => SlateElement.isElement(n) }
     );
   };
 
@@ -153,15 +111,65 @@ function Toolbar() {
   );
 }
 
+// Custom leaf renderer for marks
+const Leaf = ({ attributes, children, leaf }: any) => {
+  if (leaf.bold) {
+    children = <strong>{children}</strong>;
+  }
+
+  if (leaf.italic) {
+    children = <em>{children}</em>;
+  }
+
+  if (leaf.underline) {
+    children = <u>{children}</u>;
+  }
+
+  if (leaf.strikethrough) {
+    children = <s>{children}</s>;
+  }
+
+  if (leaf.code) {
+    children = <code>{children}</code>;
+  }
+
+  return <span {...attributes}>{children}</span>;
+};
+
+// Custom element renderer for blocks
+const Element = ({ attributes, children, element }: any) => {
+  switch (element.type) {
+    case 'h1':
+      return <h1 {...attributes}>{children}</h1>;
+    case 'h2':
+      return <h2 {...attributes}>{children}</h2>;
+    case 'h3':
+      return <h3 {...attributes}>{children}</h3>;
+    case 'blockquote':
+      return <blockquote {...attributes}>{children}</blockquote>;
+    case 'ul':
+      return <ul {...attributes}>{children}</ul>;
+    case 'ol':
+      return <ol {...attributes}>{children}</ol>;
+    case 'li':
+      return <li {...attributes}>{children}</li>;
+    default:
+      return <p {...attributes}>{children}</p>;
+  }
+};
+
 export function PlateEditor({ content = '', onChange, readOnly = false }: PlateEditorProps) {
+  // Create editor instance
+  const [editor] = useState(() => withHistory(withReact(createEditor())));
+
   // Parse content to Slate value
-  const initialValue = useMemo(() => {
-    if (!content || content.trim() === '') {
-      return [{ type: 'p', children: [{ text: '' }] }];
+  const parseContent = useCallback((text: string): Descendant[] => {
+    if (!text || text.trim() === '') {
+      return [{ type: 'p', children: [{ text: '' }] }] as any;
     }
 
     // Simple parsing - convert text to Slate nodes
-    const lines = content.split('\n');
+    const lines = text.split('\n');
     return lines.map((line) => {
       if (line.startsWith('# ')) {
         return { type: 'h1', children: [{ text: line.slice(2) }] };
@@ -172,22 +180,22 @@ export function PlateEditor({ content = '', onChange, readOnly = false }: PlateE
       } else if (line.startsWith('> ')) {
         return { type: 'blockquote', children: [{ text: line.slice(2) }] };
       } else if (line.startsWith('- ') || line.startsWith('* ')) {
-        return { type: 'ul', children: [{ type: 'li', children: [{ text: line.slice(2) }] }] };
+        return { type: 'li', children: [{ text: line.slice(2) }] };
       } else {
         return { type: 'p', children: [{ text: line }] };
       }
-    });
-  }, [content]);
+    }) as any;
+  }, []);
 
-  const editor = usePlateEditor({
-    plugins,
-    value: initialValue,
-  });
+  const initialValue = useMemo(() => parseContent(content), [content, parseContent]);
+
+  // Local state for editor value
+  const [value, setValue] = useState<Descendant[]>(initialValue);
 
   // Serialize Slate value back to text
-  const serializeToText = useCallback((nodes: any[]) => {
+  const serializeToText = useCallback((nodes: Descendant[]) => {
     return nodes
-      .map((node) => {
+      .map((node: any) => {
         const text = node.children
           ?.map((child: any) => {
             if ('text' in child) return child.text;
@@ -207,12 +215,6 @@ export function PlateEditor({ content = '', onChange, readOnly = false }: PlateE
             return `> ${text}`;
           case 'li':
             return `- ${text}`;
-          case 'ul':
-            return node.children?.map((li: any) => `- ${serializeToText([li])}`).join('\n');
-          case 'ol':
-            return node.children
-              ?.map((li: any, i: number) => `${i + 1}. ${serializeToText([li])}`)
-              .join('\n');
           default:
             return text;
         }
@@ -222,9 +224,10 @@ export function PlateEditor({ content = '', onChange, readOnly = false }: PlateE
 
   // Handle changes
   const handleChange = useCallback(
-    ({ value }: { value: any }) => {
+    (newValue: Descendant[]) => {
+      setValue(newValue);
       if (!onChange || readOnly) return;
-      const text = serializeToText(value);
+      const text = serializeToText(newValue);
       onChange(text);
     },
     [onChange, readOnly, serializeToText]
@@ -232,36 +235,32 @@ export function PlateEditor({ content = '', onChange, readOnly = false }: PlateE
 
   // Reset editor value when content prop changes (different document loaded)
   useEffect(() => {
-    if (editor && initialValue) {
-      try {
-        const editorAny = editor as any;
-        // Clear existing content
-        Transforms.delete(editorAny, {
-          at: {
-            anchor: SlateEditor.start(editorAny, []),
-            focus: SlateEditor.end(editorAny, []),
-          },
-        });
+    const newValue = initialValue;
+    setValue(newValue);
 
-        // Insert new content
-        Transforms.removeNodes(editorAny, { at: [0] });
-        Transforms.insertNodes(editorAny, initialValue as any);
-      } catch (error) {
-        console.error('Failed to reset editor content:', error);
-      }
-    }
-  }, [content]); // Intentionally using content, not initialValue
+    // Reset editor selection and history
+    editor.children = newValue;
+    editor.selection = null;
+    editor.history = { redos: [], undos: [] };
+  }, [content, initialValue, editor]);
+
+  const renderElement = useCallback((props: any) => <Element {...props} />, []);
+  const renderLeaf = useCallback((props: any) => <Leaf {...props} />, []);
 
   return (
     <div className="plate-editor-container">
-      <Plate editor={editor} onChange={handleChange}>
+      <Slate editor={editor} initialValue={value} onChange={handleChange}>
         <Toolbar />
-        <PlateContent
+        <Editable
           className="plate-editor-content"
           readOnly={readOnly}
           placeholder="Start writing..."
+          renderElement={renderElement}
+          renderLeaf={renderLeaf}
+          spellCheck
+          autoFocus
         />
-      </Plate>
+      </Slate>
 
       <style>{`
         .plate-editor-container {
@@ -344,6 +343,8 @@ export function PlateEditor({ content = '', onChange, readOnly = false }: PlateE
           color: rgba(255, 255, 255, 0.25) !important;
           font-style: italic;
           opacity: 1 !important;
+          top: 3rem !important;
+          left: 4rem !important;
         }
 
         /* Heading styles */

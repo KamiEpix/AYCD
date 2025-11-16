@@ -33,15 +33,7 @@ export default defineConfig({
       '@/utils': path.resolve('./src/lib/utils'),
     },
     // Dedupe React and Slate to avoid multiple instances
-    dedupe: [
-      'react',
-      'react-dom',
-      'slate',
-      'slate-react',
-      'slate-history',
-      'platejs',
-      '@platejs/core',
-    ],
+    dedupe: ['react', 'react-dom', 'slate', 'slate-react', 'slate-history'],
   },
 
   // Prevent vite from obscuring rust errors
