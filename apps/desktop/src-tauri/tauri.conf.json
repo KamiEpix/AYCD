@@ -43,19 +43,6 @@
       "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:"
     }
   },
-  "plugins": {
-    "dialog": {
-      "all": true
-    },
-    "fs": {
-      "scope": [
-        "$HOME/AYCD/**",
-        "$APPDATA/AYCD/**",
-        "$APPCONFIG/AYCD/**"
-      ]
-    },
-    "shell": {
-      "open": true
-    }
-  }
+  "plugins": {}
+}
 }
