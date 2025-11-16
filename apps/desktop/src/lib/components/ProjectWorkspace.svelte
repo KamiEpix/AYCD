@@ -3,13 +3,13 @@
   import { projectStore } from '$stores/project.svelte';
   import { documentStore } from '$stores/document.svelte';
   import DocumentBrowser from './DocumentBrowser.svelte';
+  import RichTextEditor from './RichTextEditor.svelte';
 
   let editorContent = $state('');
   let isSaving = $state(false);
   let hasUnsavedChanges = $state(false);
   let liveWordCount = $state(0);
   let characterCount = $state(0);
-  let lineCount = $state(1);
   let autosaveTimer: number | undefined;
   let lastSavedContent = '';
   let lastAutosaveTime = $state<number>(0);
@@ -48,7 +48,6 @@
       hasUnsavedChanges = editorContent !== lastSavedContent;
       liveWordCount = countWords(editorContent);
       characterCount = editorContent.length;
-      lineCount = editorContent.split('\n').length;
 
       // Debounced autosave: save 2 seconds after typing stops
       if (hasUnsavedChanges && !isSaving) {
@@ -61,6 +60,10 @@
       }
     }
   });
+
+  function handleEditorChange(content: string) {
+    editorContent = content;
+  }
 
 
   function handleCloseProject() {
@@ -149,17 +152,7 @@
           </div>
         </div>
         <div class="editor-container">
-          <div class="line-numbers">
-            {#each Array(lineCount) as _, i}
-              <div class="line-number">{i + 1}</div>
-            {/each}
-          </div>
-          <textarea
-            class="editor"
-            bind:value={editorContent}
-            placeholder="Start writing..."
-            spellcheck="true"
-          ></textarea>
+          <RichTextEditor content={editorContent} onChange={handleEditorChange} />
         </div>
       {:else}
         <div class="no-document">
@@ -333,49 +326,7 @@
   .editor-container {
     flex: 1;
     display: flex;
-    background: rgba(0, 0, 0, 0.2);
     overflow: hidden;
-  }
-
-  .line-numbers {
-    padding: 3rem 1rem 3rem 2rem;
-    background: rgba(0, 0, 0, 0.15);
-    border-right: 1px solid rgba(255, 255, 255, 0.05);
-    user-select: none;
-    min-width: 3.5rem;
-    text-align: right;
-  }
-
-  .line-number {
-    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-    font-size: 0.875rem;
-    line-height: 1.96875rem; /* Matches editor line-height of 1.75 * 1.125rem */
-    color: rgba(255, 255, 255, 0.25);
-    height: 1.96875rem;
-  }
-
-  .editor {
-    flex: 1;
-    padding: 3rem 4rem 3rem 2rem;
-    background: transparent;
-    border: none;
-    color: rgba(255, 255, 255, 0.95);
-    font-family: 'Charter', 'Iowan Old Style', 'Georgia', 'Cambria', 'Times New Roman', serif;
-    font-size: 1.125rem;
-    line-height: 1.75;
-    resize: none;
-    letter-spacing: 0.01em;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-
-  .editor:focus {
-    outline: none;
-  }
-
-  .editor::placeholder {
-    color: rgba(255, 255, 255, 0.25);
-    font-style: italic;
   }
 
   .no-document {
