@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "$lib": ["./src/lib"],
+      "$lib/*": ["./src/lib/*"],
+      "$components": ["./src/lib/components"],
+      "$components/*": ["./src/lib/components/*"],
+      "$stores": ["./src/lib/stores"],
+      "$stores/*": ["./src/lib/stores/*"],
+      "$api": ["./src/lib/api"],
+      "$api/*": ["./src/lib/api/*"],
+      "$utils": ["./src/lib/utils"],
+      "$utils/*": ["./src/lib/utils/*"],
+      "@aycd/core": ["../packages/core/src"]
+    },
+    "types": ["vite/client", "node"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.svelte", "vite.config.ts"],
+  "exclude": ["node_modules", "dist", "src-tauri"]
+}

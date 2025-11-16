@@ -1,0 +1,46 @@
+{
+  "name": "@aycd/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "dev:web": "vite dev --host",
+    "build": "tauri build",
+    "build:dev": "tauri build --debug",
+    "build:win": "tauri build --target x86_64-pc-windows-msvc",
+    "build:mac": "tauri build --target aarch64-apple-darwin",
+    "build:linux": "tauri build --target x86_64-unknown-linux-gnu",
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
+    "clean": "rm -rf dist node_modules src-tauri/target"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.2.0",
+    "@tauri-apps/plugin-dialog": "^2.0.0",
+    "@tauri-apps/plugin-fs": "^2.0.0",
+    "@tauri-apps/plugin-shell": "^2.0.0",
+    "svelte": "^5.17.0"
+  },
+  "devDependencies": {
+    "@aycd/core": "workspace:*",
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@tailwindcss/postcss": "^4.1.17",
+    "@tauri-apps/cli": "^2.2.0",
+    "@types/node": "^22.10.2",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9.17.0",
+    "eslint-plugin-svelte": "^2.46.1",
+    "postcss": "^8.4.49",
+    "svelte-check": "^4.1.1",
+    "tailwindcss": "^4.0.0",
+    "tslib": "^2.8.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7",
+    "vitest": "^2.1.8"
+  }
+}

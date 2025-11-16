@@ -1,0 +1,40 @@
+{
+  "name": "aycd",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AYCD - Anything You Can Do: A local-first writing and worldbuilding platform",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @aycd/desktop dev",
+    "dev:debug": "RUST_LOG=debug pnpm --filter @aycd/desktop dev",
+    "dev:web": "pnpm --filter @aycd/desktop dev:web",
+    "build": "pnpm --filter @aycd/desktop build",
+    "build:dev": "pnpm --filter @aycd/desktop build:dev",
+    "build:win": "pnpm --filter @aycd/desktop build:win",
+    "build:mac": "pnpm --filter @aycd/desktop build:mac",
+    "build:linux": "pnpm --filter @aycd/desktop build:linux",
+    "test": "pnpm -r test",
+    "test:unit": "pnpm -r test:unit",
+    "test:e2e": "pnpm --filter @aycd/desktop test:e2e",
+    "type-check": "pnpm -r type-check",
+    "lint": "pnpm -r lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "pnpm type-check && pnpm lint && pnpm format:check",
+    "check:all": "pnpm type-check && pnpm lint && pnpm format:check && pnpm test",
+    "clean": "pnpm -r clean && rm -rf node_modules",
+    "reset": "pnpm clean && pnpm install"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "prettier": "^3.4.2",
+    "prettier-plugin-svelte": "^3.3.2",
+    "prettier-plugin-tailwindcss": "^0.6.9",
+    "typescript": "^5.7.2"
+  },
+  "packageManager": "pnpm@9.15.0"
+}
