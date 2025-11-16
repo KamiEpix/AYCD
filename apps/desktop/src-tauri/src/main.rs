@@ -19,6 +19,12 @@ fn main() {
             commands::projects::list_projects,
             commands::projects::get_projects_root,
             commands::projects::update_project,
+            commands::documents::create_document,
+            commands::documents::read_document,
+            commands::documents::update_document,
+            commands::documents::delete_document,
+            commands::documents::list_documents_in_dir,
+            commands::documents::list_all_documents,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

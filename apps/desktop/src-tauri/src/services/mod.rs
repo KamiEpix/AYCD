@@ -3,6 +3,7 @@
 
 pub mod file_service;
 pub mod project_service;
+pub mod document_service;
 
 // Future service modules will be added here:
 // pub mod db_service;

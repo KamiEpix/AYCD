@@ -14,8 +14,8 @@ export async function greet(name: string): Promise<string> {
 
 // API modules
 export * from './projects';
+export * from './documents';
 
 // Future API modules will be added here:
-// export * from './documents';
 // export * from './search';
 // export * from './ai';
