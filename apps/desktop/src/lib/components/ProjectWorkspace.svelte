@@ -1,16 +1,31 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { projectStore } from '$stores/project.svelte';
   import { documentStore } from '$stores/document.svelte';
   import DocumentBrowser from './DocumentBrowser.svelte';
 
   let editorContent = $state('');
   let isSaving = $state(false);
+  let hasUnsavedChanges = $state(false);
+  let liveWordCount = $state(0);
+  let autosaveTimer: number | undefined;
+  let lastSavedContent = '';
 
   // Load documents when workspace opens
   onMount(async () => {
     if (projectStore.current) {
       await documentStore.loadDocuments(projectStore.current.path);
+    }
+
+    // Add keyboard shortcut listener
+    window.addEventListener('keydown', handleKeyboardShortcuts);
+  });
+
+  onDestroy(() => {
+    // Cleanup
+    window.removeEventListener('keydown', handleKeyboardShortcuts);
+    if (autosaveTimer) {
+      clearInterval(autosaveTimer);
     }
   });
 
@@ -18,6 +33,40 @@
   $effect(() => {
     if (documentStore.current) {
       editorContent = documentStore.current.content;
+      lastSavedContent = documentStore.current.content;
+      hasUnsavedChanges = false;
+      liveWordCount = countWords(editorContent);
+    }
+  });
+
+  // Track content changes for dirty state
+  $effect(() => {
+    if (documentStore.current) {
+      hasUnsavedChanges = editorContent !== lastSavedContent;
+      liveWordCount = countWords(editorContent);
+    }
+  });
+
+  // Setup autosave timer when document opens
+  $effect(() => {
+    if (documentStore.current) {
+      // Clear existing timer
+      if (autosaveTimer) {
+        clearInterval(autosaveTimer);
+      }
+
+      // Set up new autosave timer (30 seconds)
+      autosaveTimer = window.setInterval(() => {
+        if (hasUnsavedChanges && !isSaving) {
+          handleSave(true); // true = autosave
+        }
+      }, 30000);
+    } else {
+      // Clear timer when no document
+      if (autosaveTimer) {
+        clearInterval(autosaveTimer);
+        autosaveTimer = undefined;
+      }
     }
   });
 
@@ -26,12 +75,18 @@
     projectStore.closeProject();
   }
 
-  async function handleSave() {
+  async function handleSave(isAutosave = false) {
     if (!documentStore.current) return;
 
     isSaving = true;
     try {
       await documentStore.saveCurrentDocument(editorContent);
+      lastSavedContent = editorContent;
+      hasUnsavedChanges = false;
+
+      if (!isAutosave) {
+        console.log('Document saved successfully');
+      }
     } catch (e) {
       console.error('Failed to save:', e);
     } finally {
@@ -40,7 +95,24 @@
   }
 
   function handleCloseDocument() {
+    if (hasUnsavedChanges) {
+      const confirmed = confirm('You have unsaved changes. Are you sure you want to close this document?');
+      if (!confirmed) return;
+    }
     documentStore.closeDocument();
+  }
+
+  function handleKeyboardShortcuts(e: KeyboardEvent) {
+    // Ctrl+S (Windows/Linux) or Cmd+S (Mac)
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+      handleSave();
+    }
+  }
+
+  function countWords(text: string): number {
+    if (!text.trim()) return 0;
+    return text.trim().split(/\s+/).length;
   }
 </script>
 
@@ -66,9 +138,14 @@
             </span>
           </div>
           <div class="editor-actions">
-            <span class="word-count">{documentStore.current.wordCount} words</span>
-            <button class="btn-save" onclick={handleSave} disabled={isSaving}>
-              {isSaving ? 'Saving...' : 'Save'}
+            <span class="word-count">
+              {liveWordCount} words
+              {#if hasUnsavedChanges}
+                <span class="unsaved-indicator" title="Unsaved changes">●</span>
+              {/if}
+            </span>
+            <button class="btn-save" onclick={handleSave} disabled={isSaving || !hasUnsavedChanges}>
+              {isSaving ? 'Saving...' : hasUnsavedChanges ? 'Save *' : 'Saved'}
             </button>
             <button class="btn-close-doc" onclick={handleCloseDocument}>Close</button>
           </div>
@@ -183,6 +260,20 @@
   .word-count {
     font-size: 0.875rem;
     color: rgba(255, 255, 255, 0.5);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .unsaved-indicator {
+    color: #f59e0b;
+    font-size: 0.5rem;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
   }
 
   .btn-save,
