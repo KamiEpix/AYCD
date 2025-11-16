@@ -12,6 +12,11 @@
   --aycd-text-muted: rgba(254, 247, 240, 0.65);
   --aycd-accent: #f3c18e;
   --aycd-accent-strong: #d78644;
+  --aycd-amber: #f4c58a;
+  --aycd-sand: #d8b28e;
+  --aycd-teal: #7ec5b1;
+  --aycd-rose: #f58ba5;
+  --aycd-plum: #b59ad9;
   --aycd-danger: #ff7a6a;
   --aycd-success: #8af5c4;
   --aycd-font: 'Space Grotesk', 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;

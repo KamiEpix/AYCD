@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Descendant } from 'slate';
 import { Node, Editor, Element as SlateElement, Transforms } from 'slate';
 import type { Document } from '@aycd/core';
@@ -16,6 +16,7 @@ import {
   HighlightPlugin,
   KbdPlugin,
 } from '@platejs/basic-nodes/react';
+import { createPortal } from 'react-dom';
 import './PlateEditor.css';
 
 export interface PlateEditorProps {
@@ -40,6 +41,14 @@ const blockOptions = [
   { label: 'Quote', value: 'blockquote' },
 ];
 const defaultBlock = blockOptions[0]!;
+
+const highlightPalette = [
+  { id: 'amber', label: 'Amber', color: 'var(--aycd-amber)' },
+  { id: 'sand', label: 'Sand', color: 'var(--aycd-sand)' },
+  { id: 'rose', label: 'Rose', color: 'var(--aycd-rose)' },
+  { id: 'teal', label: 'Teal', color: 'var(--aycd-teal)' },
+  { id: 'plum', label: 'Plum', color: 'var(--aycd-plum)' },
+];
 
 const formatNodesToPlainText = (value: Descendant[]): string =>
   value.map((node) => Node.string(node as any)).join('\n').trim();
@@ -82,6 +91,37 @@ function ToolbarButton({ label, onClick, active, icon, disabled }: ToolbarButton
       {icon && <span className="aycd-toolbar-icon">{icon}</span>}
       <span>{label}</span>
     </button>
+  );
+}
+
+function HighlightSwatches({
+  active,
+  onSelect,
+  onClear,
+  readOnly,
+}: {
+  active?: string | null;
+  onSelect: (id: string) => void;
+  onClear: () => void;
+  readOnly?: boolean;
+}) {
+  return (
+    <div className="aycd-highlight-swatches">
+      {highlightPalette.map((tone) => (
+        <button
+          key={tone.id}
+          type="button"
+          className={`highlight-swatch ${active === tone.id ? 'active' : ''}`}
+          style={{ background: tone.color }}
+          onClick={() => onSelect(tone.id)}
+          disabled={readOnly}
+          aria-label={`Highlight ${tone.label}`}
+        />
+      ))}
+      <button type="button" className="highlight-clear" onClick={onClear} disabled={readOnly}>
+        Clear
+      </button>
+    </div>
   );
 }
 
@@ -159,6 +199,19 @@ function EditorToolbar({ readOnly }: { readOnly?: boolean }) {
   const editor = usePlateEditor();
   if (!editor) return null;
 
+  const activeMarks = (Editor.marks(toSlateEditor(editor)) as Record<string, unknown> | null) ?? {};
+  const activeHighlight = (activeMarks?.highlightColor as string | undefined) ?? null;
+
+  const applyHighlight = (tone: string) => {
+    Editor.addMark(toSlateEditor(editor), 'highlight', true);
+    Editor.addMark(toSlateEditor(editor), 'highlightColor', tone);
+  };
+
+  const clearHighlight = () => {
+    Editor.removeMark(toSlateEditor(editor), 'highlight');
+    Editor.removeMark(toSlateEditor(editor), 'highlightColor');
+  };
+
   return (
     <div className="aycd-toolbar-row">
       <div className="aycd-toolbar-group">
@@ -215,15 +268,51 @@ function EditorToolbar({ readOnly }: { readOnly?: boolean }) {
           disabled={readOnly}
         />
       </div>
-      <div className="aycd-toolbar-group subtle">
-        <ToolbarButton
-          label="/ Command"
-          icon={<span className="aycd-letter">/</span>}
-          onClick={() => editor.api.redecorate?.()}
-          disabled={readOnly}
-        />
+      <div className="aycd-toolbar-group spread">
+        <HighlightSwatches active={activeHighlight} onSelect={applyHighlight} onClear={clearHighlight} readOnly={readOnly} />
       </div>
     </div>
+  );
+}
+
+function AycdLeaf({ attributes, children, leaf }: any) {
+  const marks = leaf as Record<string, unknown>;
+  let updatedChildren = children;
+
+  if (marks.bold) {
+    updatedChildren = <strong>{updatedChildren}</strong>;
+  }
+  if (marks.italic) {
+    updatedChildren = <em>{updatedChildren}</em>;
+  }
+  if (marks.underline) {
+    updatedChildren = <u>{updatedChildren}</u>;
+  }
+  if (marks.strikethrough) {
+    updatedChildren = <s>{updatedChildren}</s>;
+  }
+  if (marks.code) {
+    updatedChildren = <code>{updatedChildren}</code>;
+  }
+  if (marks.kbd) {
+    updatedChildren = <kbd>{updatedChildren}</kbd>;
+  }
+
+  const highlightColor = marks.highlightColor as string | undefined;
+  const isHighlighted = Boolean(marks.highlight || highlightColor);
+
+  if (isHighlighted) {
+    updatedChildren = (
+      <span className="aycd-leaf-highlight" data-color={highlightColor ?? 'amber'}>
+        {updatedChildren}
+      </span>
+    );
+  }
+
+  return (
+    <span {...attributes} className="aycd-leaf">
+      {updatedChildren}
+    </span>
   );
 }
 
@@ -236,6 +325,8 @@ export function PlateEditor({ content = '', onChange, readOnly = false, placehol
   const editor = useMemo(() => createPlateEditor({ plugins }), [plugins]);
 
   const isApplyingExternalValue = useRef(false);
+  const editorPaneRef = useRef<HTMLDivElement | null>(null);
+  const [selectionRect, setSelectionRect] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     const value = parseContentToValue(content);
@@ -259,28 +350,92 @@ export function PlateEditor({ content = '', onChange, readOnly = false, placehol
     [onChange]
   );
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleSelectionChange = () => {
+      const selection = window.getSelection();
+      const root = editorPaneRef.current;
+      if (!selection || !root || selection.rangeCount === 0 || selection.isCollapsed) {
+        setSelectionRect(null);
+        return;
+      }
+
+      const range = selection.getRangeAt(0);
+      if (!root.contains(range.startContainer)) {
+        setSelectionRect(null);
+        return;
+      }
+
+      const rect = range.getBoundingClientRect();
+      setSelectionRect({
+        top: rect.top + window.scrollY - 12,
+        left: rect.left + rect.width / 2 + window.scrollX,
+      });
+    };
+
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => {
+      document.removeEventListener('selectionchange', handleSelectionChange);
+    };
+  }, []);
+
+  const activeMarks = (Editor.marks(toSlateEditor(editor)) as Record<string, unknown> | null) ?? {};
+  const activeHighlight = (activeMarks?.highlightColor as string | undefined) ?? null;
+
+  const applyHighlight = (tone: string) => {
+    Editor.addMark(toSlateEditor(editor), 'highlight', true);
+    Editor.addMark(toSlateEditor(editor), 'highlightColor', tone);
+  };
+
+  const clearHighlight = () => {
+    Editor.removeMark(toSlateEditor(editor), 'highlight');
+    Editor.removeMark(toSlateEditor(editor), 'highlightColor');
+  };
+
+  const portalTarget = typeof document !== 'undefined' ? document.body : null;
+
+  const selectionPopover =
+    selectionRect && !readOnly && portalTarget
+      ? createPortal(
+          <div className="aycd-selection-popover" style={{ top: selectionRect.top, left: selectionRect.left }}>
+            <div className="popover-row">
+              <button type="button" onClick={() => toggleMark(editor, 'bold')} className={isMarkActive(editor, 'bold') ? 'active' : ''}>
+                B
+              </button>
+              <button type="button" onClick={() => toggleMark(editor, 'italic')} className={isMarkActive(editor, 'italic') ? 'active' : ''}>
+                I
+              </button>
+              <button type="button" onClick={() => toggleMark(editor, 'underline')} className={isMarkActive(editor, 'underline') ? 'active' : ''}>
+                U
+              </button>
+              <button type="button" onClick={() => toggleMark(editor, 'highlight')} className={isMarkActive(editor, 'highlight') ? 'active' : ''}>
+                ✺
+              </button>
+            </div>
+            <HighlightSwatches active={activeHighlight} onSelect={applyHighlight} onClear={clearHighlight} />
+          </div>,
+          portalTarget
+        )
+      : null;
+
   return (
     <div className="aycd-plate">
       <Plate editor={editor} onChange={handleChange} readOnly={readOnly}>
         <div className="aycd-toolbar-shell">
-          <div className="aycd-toolbar-headline">
-            <div>
-              <p className="aycd-eyebrow">Rich text playground</p>
-              <h4>Plate-powered editing</h4>
-            </div>
-            <span className="aycd-pill">Live preview</span>
-          </div>
           <EditorToolbar readOnly={readOnly} />
         </div>
-        <div className="aycd-editor-pane">
+        <div className="aycd-editor-pane" ref={editorPaneRef}>
           <PlateContent
             readOnly={readOnly}
             className="aycd-plate-editable"
             placeholder={placeholder ?? 'Write something brilliant. Use / for commands.'}
             spellCheck
+            renderLeaf={((props: any) => <AycdLeaf {...props} />) as any}
           />
         </div>
       </Plate>
+      {selectionPopover}
     </div>
   );
 }
